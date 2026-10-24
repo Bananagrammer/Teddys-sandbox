@@ -2,9 +2,8 @@ import { Scene } from "@babylonjs/core/scene";
 import { PhysicsSetup } from "./systems/PhysicsSetup.js";
 import { SceneSetup } from "./systems/SceneSetup.js";
 import { InputManager } from "./systems/InputManager.js";
-import { Terrain } from "./world/Terrain.js";
-import { Castle } from "./world/Castle.js";
-import { OrcCharacter } from "./entities/OrcCharacter.js";
+import { Town } from "./world/Town.js";
+import { Boy } from "./entities/Boy.js";
 import { PlayerController } from "./controllers/PlayerController.js";
 
 export class Game {
@@ -15,29 +14,32 @@ export class Game {
   }
 
   async start() {
-    // Physics MUST initialize before any PhysicsAggregate is created
     await PhysicsSetup.init(this.scene);
-
-    // Lights, fog, shadow generator, sky color
     SceneSetup.init(this.scene);
 
-    // World geometry
-    const terrain = new Terrain(this.scene);
-    terrain.build();
+    const town = new Town(this.scene);
+    town.build();
 
-    const castle = new Castle(this.scene);
-    castle.build();
+    const boy = new Boy(this.scene);
+    boy.build();
 
-    // Orc player character (mesh + physics capsule + weapon anchors)
-    const orc = new OrcCharacter(this.scene);
-    orc.build();
-
-    // Input and movement
     const input = new InputManager(this.canvas);
-    const controller = new PlayerController(orc, input, this.scene);
+    const controller = new PlayerController(boy, input, this.scene);
     controller.attach();
 
-    // Start the render loop
+    if (import.meta.env.DEV) {
+      window.__player = {
+        get position() {
+          const p = boy.capsuleMesh.position;
+          return { x: p.x, y: p.y, z: p.z };
+        },
+        get yaw() { return controller.yaw; },
+        get pitch() { return controller.pitch; },
+        get look() { return controller.getLookDirection(); },
+        get ready() { return controller.ready; },
+      };
+    }
+
     this.engine.runRenderLoop(() => {
       this.scene.render();
     });

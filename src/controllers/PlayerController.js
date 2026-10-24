@@ -1,107 +1,84 @@
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
-import { Ray } from "@babylonjs/core/Culling/ray";
 import { UniversalCamera } from "@babylonjs/core/Cameras/universalCamera";
 
-const MOVE_SPEED     = 8;       // units per second on ground
-const JUMP_VELOCITY  = 7.5;     // upward impulse on jump
-const MOUSE_SENS     = 0.0020;  // radians per pixel
-const CAMERA_DIST    = 7;       // follow distance behind player
-const CAMERA_HEIGHT  = 3.2;     // height above capsule centre
-const MIN_PITCH      = -0.35;   // look down limit (radians)
-const MAX_PITCH       = 0.65;   // look up limit
+const MOVE_SPEED = 5;
+const MOUSE_SENS = 0.0025;
+const STICK_LOOK = 3.0;
+const PITCH_LIMIT = 1.15;
 
+/**
+ * Eyes of the boy. Walk on the ground and look around.
+ * Yaw 0 faces +Z. Positive yaw turns toward +X (look right).
+ * Positive pitch looks down, matching Babylon's camera rotation.
+ */
 export class PlayerController {
-  constructor(orc, input, scene) {
-    this.orc   = orc;
+  constructor(boy, input, scene) {
+    this.boy = boy;
     this.input = input;
     this.scene = scene;
-
-    this.yaw   = 0;   // horizontal look angle (radians)
-    this.pitch = 0.2; // vertical look angle (starts slightly down)
-    this.isGrounded = false;
+    this.camera = null;
+    this.yaw = 0;
+    this.pitch = 0;
+    this.ready = false;
+    this._frames = 0;
   }
 
   attach() {
-    // Third-person camera using UniversalCamera positioned behind the orc
-    this.camera = new UniversalCamera("playerCam", Vector3.Zero(), this.scene);
+    const start = this.boy.capsuleMesh.position;
+    this.camera = new UniversalCamera(
+      "eyes",
+      new Vector3(start.x, start.y + this.boy.eyeAboveCenter, start.z),
+      this.scene
+    );
+    this.camera.fov = 1.15;
+    this.camera.minZ = 0.08;
+    this.camera.maxZ = 250;
+    this.camera.inertia = 0;
     this.scene.activeCamera = this.camera;
 
-    // Run the update every frame before the scene renders
-    this.scene.registerBeforeRender(() => this._update());
+    this.boy.attachHands();
+    this.scene.onBeforeRenderObservable.add(() => this._update());
+  }
+
+  getLookDirection() {
+    const direction = this.camera.getDirection(new Vector3(0, 0, 1));
+    return { x: direction.x, y: direction.y, z: direction.z };
   }
 
   _update() {
-    const { dx, dy } = this.input.consumeMouseDelta();
+    const dt = Math.min(this.scene.getEngine().getDeltaTime() / 1000, 0.05);
+    const look = this.input.consumeLook();
 
-    // === Mouse look ===
-    this.yaw   += dx * MOUSE_SENS;
-    this.pitch  = Math.max(MIN_PITCH, Math.min(MAX_PITCH, this.pitch + dy * MOUSE_SENS));
+    this.yaw += look.mouseX * MOUSE_SENS + look.stickX * STICK_LOOK * dt;
+    this.pitch += look.mouseY * MOUSE_SENS + look.stickY * STICK_LOOK * dt;
+    this.pitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, this.pitch));
+    this.yaw = Math.atan2(Math.sin(this.yaw), Math.cos(this.yaw));
 
-    // === Ground check — short downward ray from capsule centre ===
-    const capsulePos = this.orc.capsuleMesh.getAbsolutePosition();
-    const groundRay  = new Ray(capsulePos, Vector3.Down(), 1.45);
-    const hit = this.scene.pickWithRay(groundRay, mesh =>
-      mesh !== this.orc.capsuleMesh &&
-      !mesh.name.startsWith("orc") &&
-      !mesh.name.startsWith("axe") &&
-      !mesh.name.startsWith("shield") &&
-      !mesh.name.startsWith("tusk") &&
-      !mesh.name.startsWith("ear") &&
-      mesh.isVisible
-    );
-    this.isGrounded = !!(hit && hit.hit && hit.distance < 1.45);
+    const body = this.boy.physicsBody.body;
+    const currentVel = body.getLinearVelocity();
+    if (!currentVel) return;
 
-    // === WASD movement ===
-    const physBody = this.orc.physicsBody.body;
-    const currentVel = physBody.getLinearVelocity();
+    const move = this.input.getMoveAxes();
+    const sin = Math.sin(this.yaw);
+    const cos = Math.cos(this.yaw);
+    const vx = (sin * move.y + cos * move.x) * MOVE_SPEED;
+    const vz = (cos * move.y - sin * move.x) * MOVE_SPEED;
+    body.setLinearVelocity(new Vector3(vx, currentVel.y, vz));
+    body.setAngularVelocity(Vector3.Zero());
 
-    let moveX = 0;
-    let moveZ = 0;
-    if (this.input.isDown("KeyW")) moveZ =  1;
-    if (this.input.isDown("KeyS")) moveZ = -1;
-    if (this.input.isDown("KeyA")) moveX = -1;
-    if (this.input.isDown("KeyD")) moveX =  1;
+    const pos = this.boy.capsuleMesh.position;
+    this.boy.root.position.set(pos.x, pos.y - this.boy.halfHeight, pos.z);
+    this.boy.root.rotation.y = this.yaw;
 
-    // Normalize diagonal movement
-    const len = Math.sqrt(moveX * moveX + moveZ * moveZ);
-    if (len > 0) { moveX /= len; moveZ /= len; }
+    this.camera.position.set(pos.x, pos.y + this.boy.eyeAboveCenter, pos.z);
+    this.camera.rotation.set(this.pitch, this.yaw, 0);
 
-    // Rotate move direction by yaw so WASD is relative to camera facing
-    const cosY = Math.cos(this.yaw);
-    const sinY = Math.sin(this.yaw);
-    const worldX =  moveX * cosY + moveZ * sinY;
-    const worldZ = -moveX * sinY + moveZ * cosY;
-
-    // Apply velocity — preserve vertical (gravity) component
-    const targetVelX = worldX * MOVE_SPEED;
-    const targetVelZ = worldZ * MOVE_SPEED;
-    physBody.setLinearVelocity(new Vector3(targetVelX, currentVel.y, targetVelZ));
-
-    // === Jump ===
-    if (this.input.isDown("Space") && this.isGrounded) {
-      physBody.setLinearVelocity(new Vector3(targetVelX, JUMP_VELOCITY, targetVelZ));
+    if (this.boy.handsRoot) {
+      this.boy.handsRoot.position.copyFrom(this.camera.position);
+      this.boy.handsRoot.rotation.set(this.pitch, this.yaw, 0);
     }
 
-    // === Rotate visual orc root to face direction of travel ===
-    this.orc.root.rotation.y = this.yaw;
-
-    // === Sync visual root to physics capsule ===
-    // Offset downward so the feet of the visual mesh sit at ground level
-    this.orc.root.position.x = capsulePos.x;
-    this.orc.root.position.y = capsulePos.y - 1.15;
-    this.orc.root.position.z = capsulePos.z;
-
-    // === Position camera behind and above the orc ===
-    // Camera swings on a boom behind the character based on yaw + pitch
-    const camX = capsulePos.x - Math.sin(this.yaw) * CAMERA_DIST;
-    const camY = capsulePos.y + CAMERA_HEIGHT + this.pitch * 2;
-    const camZ = capsulePos.z - Math.cos(this.yaw) * CAMERA_DIST;
-
-    // Smooth lerp so camera doesn't snap
-    this.camera.position = Vector3.Lerp(this.camera.position, new Vector3(camX, camY, camZ), 0.18);
-
-    // Always look at a point slightly above the orc's centre (head level)
-    const lookAt = new Vector3(capsulePos.x, capsulePos.y + 0.5, capsulePos.z);
-    this.camera.setTarget(lookAt);
+    this._frames += 1;
+    if (this._frames > 10) this.ready = true;
   }
 }
