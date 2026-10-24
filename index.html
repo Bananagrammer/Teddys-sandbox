@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Town Walk</title>
+  <title>Town Lamps</title>
   <link rel="icon" href="data:," />
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -14,17 +14,32 @@
       display: block;
       touch-action: none;
     }
-    #hud {
+    #goal, #hud, #prompt {
       position: fixed;
-      top: 16px;
       left: 50%;
       transform: translateX(-50%);
-      color: #ddd;
+      color: #eee;
       font-family: monospace;
-      font-size: 14px;
+      text-align: center;
       text-shadow: 1px 1px 3px #000;
       pointer-events: none;
       user-select: none;
+    }
+    #goal {
+      top: 18px;
+      font-size: 20px;
+      letter-spacing: 0.02em;
+    }
+    #hud {
+      top: 48px;
+      color: #ddd;
+      font-size: 14px;
+      max-width: 92vw;
+    }
+    #prompt {
+      bottom: 36px;
+      font-size: 18px;
+      color: #ffe7a3;
     }
     #crosshair {
       position: fixed;
@@ -40,7 +55,9 @@
 </head>
 <body>
   <canvas id="renderCanvas" tabindex="0"></canvas>
-    <div id="hud">Click for mouse look &nbsp;|&nbsp; WASD: walk &nbsp;|&nbsp; Mouse: look &nbsp;|&nbsp; Xbox: left stick walks, right stick looks</div>
+  <div id="goal">Light the street lamps  0 / 4</div>
+  <div id="hud">Click for mouse look &nbsp;|&nbsp; WASD: walk &nbsp;|&nbsp; Mouse: look &nbsp;|&nbsp; E or A: light a lamp</div>
+  <div id="prompt"></div>
   <div id="crosshair">+</div>
   <script type="module" src="/src/main.js"></script>
 </body>

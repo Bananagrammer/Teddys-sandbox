@@ -1,6 +1,8 @@
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
 import { Color3 } from "@babylonjs/core/Maths/math.color";
+import { Vector3 } from "@babylonjs/core/Maths/math.vector";
+import { PointLight } from "@babylonjs/core/Lights/pointLight";
 import { PhysicsAggregate, PhysicsShapeType } from "@babylonjs/core/Physics/v2";
 
 // A few buildings around a crossroads. Coordinates are meters.
@@ -55,6 +57,12 @@ export class Town {
     for (const spec of BUILDINGS) this._building(spec);
     this._well(6.2, 5.4);
     TREES.forEach(([x, z], i) => this._tree(i, x, z));
+    this.lamps = [
+      [8, 12],
+      [-8, 12],
+      [8, -12],
+      [-8, -12],
+    ].map(([x, z], i) => this._lamp(i, x, z));
   }
 
   _ground() {
@@ -172,6 +180,45 @@ export class Town {
     this.scene._shadowGenerator?.addShadowCaster(spire);
   }
 
+  _lamp(index, x, z) {
+    const pole = MeshBuilder.CreateCylinder(`lampPole${index}`, {
+      height: 3.2,
+      diameter: 0.18,
+      tessellation: 8,
+    }, this.scene);
+    pole.position.set(x, 1.6, z);
+    pole.material = this._mat(`lampPoleMat${index}`, 0.22, 0.22, 0.24, 0.15);
+    pole.receiveShadows = true;
+    this.scene._shadowGenerator?.addShadowCaster(pole);
+    new PhysicsAggregate(pole, PhysicsShapeType.CYLINDER, { mass: 0 }, this.scene);
+
+    const glassMat = this._mat(`lampGlassMat${index}`, 0.12, 0.12, 0.13, 0.05);
+    const glass = MeshBuilder.CreateSphere(`lampGlass${index}`, {
+      diameter: 0.46,
+      segments: 8,
+    }, this.scene);
+    glass.position.set(x, 3.3, z);
+    glass.material = glassMat;
+
+    const light = new PointLight(`lampLight${index}`, new Vector3(x, 3.3, z), this.scene);
+    light.diffuse = new Color3(1, 0.82, 0.45);
+    light.intensity = 0;
+    light.range = 18;
+
+    return {
+      x,
+      z,
+      lit: false,
+      lightUp() {
+        if (this.lit) return;
+        this.lit = true;
+        glassMat.diffuseColor = new Color3(1, 0.9, 0.55);
+        glassMat.emissiveColor = new Color3(1, 0.72, 0.25);
+        light.intensity = 1.5;
+      },
+    };
+  }
+
   _well(x, z) {
     const wall = MeshBuilder.CreateCylinder("well", {
       height: 0.85,
@@ -231,6 +278,7 @@ export class Town {
     const mat = new StandardMaterial(name, this.scene);
     mat.diffuseColor = new Color3(r, g, b);
     mat.specularColor = new Color3(spec, spec, spec);
+    mat.maxSimultaneousLights = 6;
     return mat;
   }
 }

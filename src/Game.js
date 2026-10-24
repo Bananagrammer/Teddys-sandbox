@@ -5,6 +5,7 @@ import { InputManager } from "./systems/InputManager.js";
 import { Town } from "./world/Town.js";
 import { Boy } from "./entities/Boy.js";
 import { PlayerController } from "./controllers/PlayerController.js";
+import { LampErrand } from "./systems/LampErrand.js";
 
 export class Game {
   constructor(engine, canvas) {
@@ -27,6 +28,9 @@ export class Game {
     const controller = new PlayerController(boy, input, this.scene);
     controller.attach();
 
+    const errand = new LampErrand(town, boy, input);
+    errand.attach(this.scene);
+
     if (import.meta.env.DEV) {
       window.__player = {
         get position() {
@@ -37,6 +41,10 @@ export class Game {
         get pitch() { return controller.pitch; },
         get look() { return controller.getLookDirection(); },
         get ready() { return controller.ready; },
+        get lit() { return errand.litCount; },
+        get done() { return errand.done; },
+        get goal() { return document.getElementById("goal")?.textContent ?? ""; },
+        get prompt() { return document.getElementById("prompt")?.textContent ?? ""; },
       };
     }
 
