@@ -215,6 +215,9 @@ function decorate(buildings) {
 }
 
 // Plaque 48 is the last lot (mesh name house47), centered near (144.4, 131).
+// Its street door faces south and starts shut. Glass windows sit on both sides
+// of that plaque, and another is centered on the north wall. A television hangs
+// on the east wall, across from the couch.
 // A modest footprint bump, same center and door, so the room can hold furniture
 // without shifting the chapel, the well, the lamps, or any other lot.
 function enlargeHouse48(buildings) {

@@ -70,8 +70,23 @@ export class Game {
         get ladder() { return controller.ladder; },
         get meshNames() { return boy.scene.meshes.map((mesh) => mesh.name); },
         place(x, y, z) { controller.place(x, y, z); },
-        get door() {
-          const door = town.chapelDoor;
+        aim(yaw, pitch) {
+          controller.yaw = yaw;
+          if (typeof pitch === "number") controller.pitch = pitch;
+        },
+        mesh(name) {
+          const mesh = boy.scene.getMeshByName(name);
+          if (!mesh) return null;
+          return {
+            x: mesh.position.x,
+            y: mesh.position.y,
+            z: mesh.position.z,
+            alpha: mesh.material?.alpha ?? null,
+          };
+        },
+        get door() { return this.doorState(town.chapelDoor); },
+        get houseDoor() { return this.doorState(town.house48Door); },
+        doorState(door) {
           if (!door) return null;
           const p = boy.capsuleMesh.position;
           const q = door.mesh.rotationQuaternion;

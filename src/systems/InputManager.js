@@ -6,8 +6,9 @@ const DEADZONE = 0.18;
  * Jump is Xbox A (button 0) or Space, edge-triggered, away from the ladder.
  * Holding A in front of the ladder climbs; that hold is not a jump.
  * Space is never a climb button.
- * The chapel door is Xbox X (button 2) or F, edge-triggered, and only while near it.
- * One press opens the door; the next press closes it.
+ * The nearest door (chapel or house 48) is Xbox X (button 2) or F, edge-triggered,
+ * and only while he is standing next to that door.
+ * One press opens the door; the next press closes it. A and Space still jump.
  * Axes follow the W3C standard gamepad mapping:
  * 0 left X, 1 left Y (up is negative), 2 right X, 3 right Y (up is negative).
  * Buttons: 0 is the bottom face button (A on Xbox).
@@ -133,7 +134,7 @@ export class InputManager {
   /**
    * True on the frame F or Xbox X (standard button 2) goes down.
    * Holding either does not keep returning true. A and Space are not this action.
-   * Near the chapel door, that edge toggles the leaf open or shut.
+   * Near the chapel or house 48, that edge toggles the nearest door.
    */
   consumeDoor() {
     const down = this.isDown("KeyF") || this._padButton(2);
@@ -172,9 +173,9 @@ export class InputManager {
       ? "Esc: release mouse"
       : "Click for mouse look";
     const pad = this._padConnected
-      ? "Xbox connected — left stick walks, right stick looks, hold A at the ladder to climb, A jumps away from it, X toggles the chapel door"
-      : "Xbox: left stick walks, right stick looks, hold A at the ladder to climb, A jumps away from it, X toggles the chapel door";
-    hud.textContent = `${look}  |  WASD or arrows: walk  |  Space: jump  |  F: toggle chapel door  |  Mouse: look  |  ${pad}`;
+      ? "Xbox connected — left stick walks, right stick looks, hold A at the ladder to climb, A jumps away from it, X toggles the nearest door"
+      : "Xbox: left stick walks, right stick looks, hold A at the ladder to climb, A jumps away from it, X toggles the nearest door";
+    hud.textContent = `${look}  |  WASD or arrows: walk  |  Space: jump  |  F: toggle the nearest door  |  Mouse: look  |  ${pad}`;
   }
 }
 

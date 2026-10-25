@@ -34,13 +34,19 @@ const CHAPEL_OPEN_ANGLE = 1.9;
 const CHAPEL_SWING_SPEED = 1.7;
 const CHAPEL_DOOR_REACH = 2.4;
 
-// House 48 doorway. Wider than the 0.56 m capsule, and left open:
-// F and Xbox X stay the chapel door and do not operate this entrance.
+// House 48 doorway. Wider than the 0.56 m capsule. The leaf covers it until
+// F or Xbox X, next to this door, swings it open. The same control toggles the chapel.
 const HOUSE48_WALL = 0.34;
 const HOUSE48_OPEN_W = 1.28;
 const HOUSE48_OPEN_H = 2.1;
-// One window, right of the door on the street wall. The sill stays above a jump
-// (capsule top peaks near 2.4 m), so the doorway is still the way in.
+const HOUSE48_DOOR_W = 1.42;
+const HOUSE48_DOOR_H = 2.22;
+const HOUSE48_DOOR_T = 0.08;
+// The street trim stands about 0.08 m proud of the wall. The leaf sits just outside it.
+const HOUSE48_DOOR_PROUD = 0.14;
+// Three panes share this size. One is right of the street door, one is left of
+// the plaque, and one is centered on the opposite wall. The sill stays above a
+// jump (capsule top peaks near 2.4 m).
 const HOUSE48_WIN_W = 1.4;
 const HOUSE48_WIN_H = 1.3;
 const HOUSE48_WIN_SILL = 2.85;
@@ -58,6 +64,8 @@ export class Town {
     this._wellStone = null;
     this._waterMat = null;
     this.chapelDoor = null;
+    this.house48Door = null;
+    this.doors = [];
   }
 
   build() {
@@ -204,7 +212,13 @@ export class Town {
     if (!steeple) this._chimney(name, x, z, w, d, h);
 
     if (steeple) this._chapelDoor(name, x, z, w, d, door);
-    else if (furnished) this._house48DoorFace(name, x, z, w, d, door);
+    else if (furnished) {
+      this._house48DoorFace(name, x, z, w, d, door);
+      this._swingDoor(
+        "house48Door", name, x, z, w, d, door,
+        HOUSE48_DOOR_W, HOUSE48_DOOR_H, HOUSE48_DOOR_T, HOUSE48_DOOR_PROUD,
+      );
+    }
     else this._doorAndWindows(name, x, z, w, d, door);
     if (awning) this._awning(name, x, z, w, d, door);
     if (steeple) {
@@ -393,8 +407,19 @@ export class Town {
    * Positive swing rotates the leaf outward (see _poseChapelDoor).
    */
   _chapelDoor(name, x, z, w, d, door) {
-    const half = CHAPEL_DOOR_W / 2;
-    const proud = 0.025 + CHAPEL_DOOR_T / 2;
+    this._swingDoor(
+      "chapelDoor", name, x, z, w, d, door,
+      CHAPEL_DOOR_W, CHAPEL_DOOR_H, CHAPEL_DOOR_T, 0.025 + CHAPEL_DOOR_T / 2,
+    );
+  }
+
+  /**
+   * Door leaf hinged at one jamb, just outside the wall. It starts shut.
+   * `key` is the field that keeps this leaf (chapelDoor or house48Door).
+   * F or Xbox X toggles whichever of these leaves he is standing next to.
+   */
+  _swingDoor(key, name, x, z, w, d, door, leafW, leafH, thick, proud) {
+    const half = leafW / 2;
     let hingeX;
     let hingeZ;
     let closedYaw;
@@ -427,23 +452,23 @@ export class Town {
     }
 
     const mesh = MeshBuilder.CreateBox(`${name}Door`, {
-      width: CHAPEL_DOOR_T,
-      height: CHAPEL_DOOR_H,
-      depth: CHAPEL_DOOR_W,
-      faceUV: boxFaceUV(CHAPEL_DOOR_T, CHAPEL_DOOR_H, CHAPEL_DOOR_W, 0.8),
+      width: thick,
+      height: leafH,
+      depth: leafW,
+      faceUV: boxFaceUV(thick, leafH, leafW, 0.8),
     }, this.scene);
     mesh.material = this._doorMat;
     mesh.receiveShadows = true;
     this.scene._shadowGenerator?.addShadowCaster(mesh);
 
-    this.chapelDoor = {
+    const record = {
       mesh,
       aggregate: null,
       hingeX,
       hingeZ,
       closedYaw,
       half,
-      height: CHAPEL_DOOR_H,
+      height: leafH,
       angle: 0,
       openAngle: CHAPEL_OPEN_ANGLE,
       opening: false,
@@ -453,18 +478,23 @@ export class Town {
       anchorZ,
       facing: door,
     };
-    this._poseChapelDoor();
+    this[key] = record;
+    this.doors.push(record);
+    this._poseDoor(record);
 
     const aggregate = new PhysicsAggregate(mesh, PhysicsShapeType.BOX, { mass: 0, friction: 0.5 }, this.scene);
     aggregate.body.setMotionType(PhysicsMotionType.ANIMATED);
     aggregate.body.disablePreStep = false;
     aggregate.body.disableSync = true;
     aggregate.body.setGravityFactor(0);
-    this.chapelDoor.aggregate = aggregate;
+    record.aggregate = aggregate;
   }
 
   _poseChapelDoor() {
-    const door = this.chapelDoor;
+    this._poseDoor(this.chapelDoor);
+  }
+
+  _poseDoor(door) {
     if (!door) return;
     const yaw = door.closedYaw + door.angle;
     door.mesh.position.set(
@@ -483,16 +513,36 @@ export class Town {
    * so the leaf blocks the doorway again.
    */
   tryToggleChapelDoor(px, pz) {
-    const door = this.chapelDoor;
-    if (!door || door.opening || door.closing) return false;
-    if (Math.hypot(px - door.anchorX, pz - door.anchorZ) > CHAPEL_DOOR_REACH) return false;
+    return this.tryToggleDoor(px, pz);
+  }
+
+  /** Nearest shut-or-open leaf within reach. A swinging leaf is left alone. */
+  tryToggleDoor(px, pz) {
+    let door = null;
+    let best = CHAPEL_DOOR_REACH;
+    for (const leaf of this.doors) {
+      if (!leaf || leaf.opening || leaf.closing) continue;
+      const distance = Math.hypot(px - leaf.anchorX, pz - leaf.anchorZ);
+      if (distance <= best) {
+        best = distance;
+        door = leaf;
+      }
+    }
+    if (!door) return false;
     if (door.opened) door.closing = true;
     else door.opening = true;
     return true;
   }
 
   updateChapelDoor(dt) {
-    const door = this.chapelDoor;
+    this.updateDoors(dt);
+  }
+
+  updateDoors(dt) {
+    for (const door of this.doors) this._stepDoor(door, dt);
+  }
+
+  _stepDoor(door, dt) {
     if (!door || (!door.opening && !door.closing)) return;
     if (door.closing) {
       door.angle = Math.max(0, door.angle - CHAPEL_SWING_SPEED * dt);
@@ -509,7 +559,7 @@ export class Town {
         door.opened = true;
       }
     }
-    this._poseChapelDoor();
+    this._poseDoor(door);
   }
 
   /**
@@ -668,8 +718,9 @@ export class Town {
   }
 
   /**
-   * Hollow house 48. Wall slabs leave an open doorway on the street face.
-   * The boy walks in; nothing here listens for F or Xbox X.
+   * Hollow house 48. The street wall has a doorway with a high window on each
+   * side of the plaque, and the opposite wall has a high window. The door leaf,
+   * not this shell, listens for F and Xbox X.
    */
   _house48Shell(name, x, z, w, d, h, wallMat, door) {
     const T = HOUSE48_WALL;
@@ -679,8 +730,10 @@ export class Town {
       { side: "east", px: x + w / 2 - T / 2, pz: z, sx: T, sz: d, alongX: false },
       { side: "west", px: x - w / 2 + T / 2, pz: z, sx: T, sz: d, alongX: false },
     ];
+    const opposite = { north: "south", south: "north", east: "west", west: "east" }[door];
     for (const wall of sides) {
       if (wall.side === door) this._house48DoorWall(name, wall, h, wallMat);
+      else if (wall.side === opposite) this._house48OppositeWindowWall(name, wall, h, wallMat);
       else this._solidBox(`${name}Wall${wall.side}`, wall.sx, h, wall.sz, wall.px, h / 2, wall.pz, wallMat, 1.7);
     }
 
@@ -733,27 +786,33 @@ export class Town {
     const jamb = (span - openW) / 2;
     const lintelH = h - openH;
     if (wall.alongX) {
-      this._solidBox(`${name}JambL`, jamb, h, wall.sz, wall.px - openW / 2 - jamb / 2, h / 2, wall.pz, wallMat, 1.7);
       this._solidBox(`${name}Lintel`, openW, lintelH, wall.sz, wall.px, openH + lintelH / 2, wall.pz, wallMat, 1.7);
     } else {
-      this._solidBox(`${name}JambL`, wall.sx, h, jamb, wall.px, h / 2, wall.pz - openW / 2 - jamb / 2, wallMat, 1.7);
       this._solidBox(`${name}Lintel`, wall.sx, lintelH, openW, wall.px, openH + lintelH / 2, wall.pz, wallMat, 1.7);
     }
-    this._house48WindowJamb(name, wall, h, wallMat, jamb);
+    // Positive side is to the right of the plaque when you face the door from the street.
+    this._house48WindowJamb(name, wall, h, wallMat, jamb, 1);
+    this._house48WindowJamb(name, wall, h, wallMat, jamb, -1);
   }
 
   /**
-   * The right-hand jamb, split around one opening. The hole starts above a jump,
-   * so the boy cannot walk out through it.
+   * One jamb, split around a high opening. `side` is 1 on the right of the
+   * plaque and -1 on the left. The hole starts above a jump, so the boy
+   * cannot walk or jump out through it.
    */
-  _house48WindowJamb(name, wall, h, wallMat, jamb) {
-    const doorEdge = HOUSE48_OPEN_W / 2;
-    const wallEdge = HOUSE48_OPEN_W / 2 + jamb;
-    const winNear = HOUSE48_WIN_LATERAL - HOUSE48_WIN_W / 2;
-    const winFar = HOUSE48_WIN_LATERAL + HOUSE48_WIN_W / 2;
+  _house48WindowJamb(name, wall, h, wallMat, jamb, side) {
+    const sign = side < 0 ? -1 : 1;
+    const tag = sign < 0 ? "L" : "R";
+    const doorEdge = sign * (HOUSE48_OPEN_W / 2);
+    const wallEdge = sign * (HOUSE48_OPEN_W / 2 + jamb);
+    const winNear = sign * (HOUSE48_WIN_LATERAL - HOUSE48_WIN_W / 2);
+    const winFar = sign * (HOUSE48_WIN_LATERAL + HOUSE48_WIN_W / 2);
     const sill = HOUSE48_WIN_SILL;
     const head = HOUSE48_WIN_SILL + HOUSE48_WIN_H;
-    const fits = doorEdge < winNear && winFar < wallEdge && sill > HOUSE48_OPEN_H && head < h - 0.2;
+    const fits = sign * doorEdge < sign * winNear
+      && sign * winFar < sign * wallEdge
+      && sill > HOUSE48_OPEN_H
+      && head < h - 0.2;
     const place = (suffix, from, to, y, height) => {
       const len = Math.abs(to - from);
       if (len < 0.02 || height < 0.02) return;
@@ -765,13 +824,14 @@ export class Town {
       }
     };
     if (!fits) {
-      place("JambR", doorEdge, wallEdge, h / 2, h);
+      place(sign < 0 ? "JambL" : "JambR", doorEdge, wallEdge, h / 2, h);
       return;
     }
-    place("JambRIn", doorEdge, winNear, h / 2, h);
-    place("JambROut", winFar, wallEdge, h / 2, h);
-    place("WinSill", winNear, winFar, sill / 2, sill);
-    place("WinHead", winNear, winFar, (head + h) / 2, h - head);
+    place(`Jamb${tag}In`, doorEdge, winNear, h / 2, h);
+    place(`Jamb${tag}Out`, winFar, wallEdge, h / 2, h);
+    const band = sign < 0 ? "LeftWin" : "Win";
+    place(`${band}Sill`, winNear, winFar, sill / 2, sill);
+    place(`${band}Head`, winNear, winFar, (head + h) / 2, h - head);
   }
 
   _house48Skirt(name, x, z, w, d, door) {
@@ -814,7 +874,7 @@ export class Town {
     }
   }
 
-  /** Door trim, plus one glass window in the street wall. The doorway stays open. */
+  /** Door trim, both street windows, and the window on the opposite wall. */
   _house48DoorFace(name, x, z, w, d, door) {
     const face = this._faceOffset(door, w, d, 0.045);
     const along = face.alongX;
@@ -838,24 +898,56 @@ export class Town {
     box("TrimR", jambW, thin, HOUSE48_OPEN_H, edge, HOUSE48_OPEN_H / 2, this._trimMat);
     box("TrimHead", HOUSE48_OPEN_W + jambW * 2, thin, 0.14, 0, HOUSE48_OPEN_H + 0.07, this._trimMat);
 
-    this._house48Window(name, x, z, w, d, door);
+    this._house48Window(name, x, z, w, d, door, -HOUSE48_WIN_LATERAL, "LeftWin");
+    this._house48Window(name, x, z, w, d, door, HOUSE48_WIN_LATERAL, "Win");
+    const opposite = { north: "south", south: "north", east: "west", west: "east" }[door];
+    this._house48Window(name, x, z, w, d, opposite, 0, "FarWin");
+  }
+
+  /** North wall (the face opposite the door), split around one centered window. */
+  _house48OppositeWindowWall(name, wall, h, wallMat) {
+    const span = wall.alongX ? wall.sx : wall.sz;
+    const half = span / 2;
+    const winNear = -HOUSE48_WIN_W / 2;
+    const winFar = HOUSE48_WIN_W / 2;
+    const sill = HOUSE48_WIN_SILL;
+    const head = HOUSE48_WIN_SILL + HOUSE48_WIN_H;
+    const fits = winFar < half - 0.3 && sill > 1.2 && head < h - 0.25;
+    const place = (suffix, from, to, y, height) => {
+      const len = Math.abs(to - from);
+      if (len < 0.02 || height < 0.02) return;
+      const center = (from + to) / 2;
+      if (wall.alongX) {
+        this._solidBox(`${name}${suffix}`, len, height, wall.sz, wall.px + center, y, wall.pz, wallMat, 1.7);
+      } else {
+        this._solidBox(`${name}${suffix}`, wall.sx, height, len, wall.px, y, wall.pz + center, wallMat, 1.7);
+      }
+    };
+    if (!fits) {
+      place("FarWall", -half, half, h / 2, h);
+      return;
+    }
+    place("FarL", -half, winNear, h / 2, h);
+    place("FarR", winFar, half, h / 2, h);
+    place("FarSill", winNear, winFar, sill / 2, sill);
+    place("FarHead", winNear, winFar, (head + h) / 2, h - head);
   }
 
   /**
-   * Glass in the street-wall opening, with a frame that shows on both faces.
-   * No collider: the sill is above reach, and the doorway is the way in.
+   * Framed glass in a wall opening. No collider: the sill is above a jump.
+   * `face` is the wall the pane sits in, and `prefix` keeps the panes distinct.
    */
-  _house48Window(name, x, z, w, d, door) {
-    const center = this._faceOffset(door, w, d, -HOUSE48_WALL / 2);
+  _house48Window(name, x, z, w, d, face, lateral, prefix) {
+    const center = this._faceOffset(face, w, d, -HOUSE48_WALL / 2);
     const along = center.alongX;
-    const side = this._lateral(door, HOUSE48_WIN_LATERAL);
+    const side = this._lateral(face, lateral);
     const y = HOUSE48_WIN_SILL + HOUSE48_WIN_H / 2;
     const px = x + center.x + side.x;
     const pz = z + center.z + side.z;
     const paneDepth = HOUSE48_WALL + 0.08;
     const frame = 0.1;
     const bar = (suffix, alongWall, normal, height, dx, dy, dz) => {
-      const mesh = MeshBuilder.CreateBox(`${name}${suffix}`, {
+      const mesh = MeshBuilder.CreateBox(`${name}${prefix}${suffix}`, {
         width: along ? normal : alongWall,
         height,
         depth: along ? alongWall : normal,
@@ -868,16 +960,16 @@ export class Town {
     };
     const halfW = HOUSE48_WIN_W / 2;
     const halfH = HOUSE48_WIN_H / 2;
-    const left = this._lateral(door, -halfW);
-    const right = this._lateral(door, halfW);
-    bar("WinFrameL", frame, paneDepth, HOUSE48_WIN_H + frame, left.x, 0, left.z);
-    bar("WinFrameR", frame, paneDepth, HOUSE48_WIN_H + frame, right.x, 0, right.z);
-    bar("WinFrameSill", HOUSE48_WIN_W + frame, paneDepth, frame, 0, -halfH, 0);
-    bar("WinFrameHead", HOUSE48_WIN_W + frame, paneDepth, frame, 0, halfH, 0);
-    bar("WinMuntinV", 0.05, 0.06, HOUSE48_WIN_H - frame, 0, 0, 0);
-    bar("WinMuntinH", HOUSE48_WIN_W - frame, 0.06, 0.05, 0, 0, 0);
+    const left = this._lateral(face, -halfW);
+    const right = this._lateral(face, halfW);
+    bar("FrameL", frame, paneDepth, HOUSE48_WIN_H + frame, left.x, 0, left.z);
+    bar("FrameR", frame, paneDepth, HOUSE48_WIN_H + frame, right.x, 0, right.z);
+    bar("FrameSill", HOUSE48_WIN_W + frame, paneDepth, frame, 0, -halfH, 0);
+    bar("FrameHead", HOUSE48_WIN_W + frame, paneDepth, frame, 0, halfH, 0);
+    bar("MuntinV", 0.05, 0.06, HOUSE48_WIN_H - frame, 0, 0, 0);
+    bar("MuntinH", HOUSE48_WIN_W - frame, 0.06, 0.05, 0, 0, 0);
 
-    const glass = MeshBuilder.CreateBox(`${name}WinGlass`, {
+    const glass = MeshBuilder.CreateBox(`${name}${prefix}Glass`, {
       width: along ? 0.03 : HOUSE48_WIN_W - 0.08,
       height: HOUSE48_WIN_H - 0.08,
       depth: along ? HOUSE48_WIN_W - 0.08 : 0.03,
@@ -903,8 +995,9 @@ export class Town {
   }
 
   /**
-   * Table, couch, bed, rug, and chairs. The rug is a flat decal.
-   * The table, couch, bed, and chairs are solid so he cannot walk through them.
+   * Table, couch, bed, rug, chairs, and a television on the wall opposite the couch.
+   * The rug is a flat decal. The table, couch, bed, chairs, and television
+   * bezel are solid so he cannot walk through them.
    */
   _house48Furniture(name, x, z, w, d, door) {
     const T = HOUSE48_WALL;
@@ -1019,6 +1112,22 @@ export class Town {
     put(
       "BedBlanket", 1.15, bedSideLen - 0.16, 0.06,
       bedOut + 0.32, bedSide, floorY + frameH + mattressH + 0.03, blanketMat, false, false,
+    );
+
+    // The blue couch sits on the west wall and faces east. The set hangs on
+    // that opposite wall, centered across from the couch.
+    const tvDepth = 0.07;
+    const tvSide = innerSide - tvDepth / 2 - 0.012;
+    const tvCenterY = 1.45;
+    const tvBezel = this._mat(`${name}TvBezel`, 0.08, 0.08, 0.09, 0.22);
+    const tvScreen = this._mat(`${name}TvGlow`, 0.04, 0.07, 0.1, 0.45);
+    tvScreen.emissiveColor = new Color3(0.1, 0.22, 0.34);
+    tvBezel.maxSimultaneousLights = 8;
+    tvScreen.maxSimultaneousLights = 8;
+    put("TvBezel", 1.36, tvDepth, 0.86, couchOut, tvSide, tvCenterY, tvBezel, true, false);
+    put(
+      "TvScreen", 1.16, 0.018, 0.68,
+      couchOut, tvSide - tvDepth / 2 - 0.008, tvCenterY, tvScreen, false, false,
     );
 
     const light = new PointLight(
