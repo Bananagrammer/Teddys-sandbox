@@ -27,7 +27,19 @@ export const LAMPS = [
 // The three shops stay beside the plaza. Plaques stay 1–48.
 export const TREE_HOUSE = { x: 160, z: 161 };
 
-// Meshes in Town._treeHouse stay inside this box (deck, stair, cabin, leaves).
+// Ladder where the stair used to meet the deck: south edge, west of the trunk.
+// The climb column is a tight spot in front of the rails, about a meter, not the meadow.
+// standX/standZ is on the deck, clear of the cabin (cabin starts farther north).
+export const TREE_LADDER = {
+  x: 158.15,
+  z: 157.3,
+  deckTop: 3.2,
+  climb: { x0: 157.65, x1: 158.65, z0: 155.88, z1: 156.9 },
+  standX: 158.15,
+  standZ: 157.9,
+};
+
+// Meshes in Town._treeHouse stay inside this box (deck, ladder, cabin, leaves).
 const TREE_HOUSE_BOX = { x0: 156.4, x1: 164.8, z0: 148.6, z1: 165.2 };
 
 const WALLS = [

@@ -3,7 +3,9 @@ const DEADZONE = 0.18;
 /**
  * Keyboard, mouse, and standard-mapping gamepads (Xbox layout).
  * Left stick / WASD walk. Right stick / mouse look.
- * Jump is Xbox A (button 0) or Space, edge-triggered.
+ * Jump is Xbox A (button 0) or Space, edge-triggered, away from the ladder.
+ * Holding A in front of the ladder climbs; that hold is not a jump.
+ * Space is never a climb button.
  * The chapel door is Xbox X (button 2) or F, edge-triggered, and only while near it.
  * One press opens the door; the next press closes it.
  * Axes follow the W3C standard gamepad mapping:
@@ -18,7 +20,8 @@ export class InputManager {
     this.mouseDeltaY = 0;
     this.pointerLocked = false;
     this._padConnected = false;
-    this._jumpHeld = false;
+    this._spaceHeld = false;
+    this._padAHeld = false;
     this._doorHeld = false;
 
     document.addEventListener("keydown", (e) => {
@@ -108,14 +111,23 @@ export class InputManager {
   }
 
   /**
-   * True on the frame Space or Xbox A goes down. Holding either
-   * does not keep returning true.
+   * Edge of Space, and edge of Xbox A. Holding either does not keep
+   * returning true, so a hop does not chain. The controller drops the A
+   * edge while he is in the ladder spot and climbs from isPadAHeld instead.
    */
   consumeJump() {
-    const down = this.isDown("Space") || this._padButton(0);
-    const edge = down && !this._jumpHeld;
-    this._jumpHeld = down;
-    return edge;
+    const spaceDown = this.isDown("Space");
+    const padDown = this._padButton(0);
+    const space = spaceDown && !this._spaceHeld;
+    const pad = padDown && !this._padAHeld;
+    this._spaceHeld = spaceDown;
+    this._padAHeld = padDown;
+    return { space, pad };
+  }
+
+  /** True while Xbox A (button 0) is held. Space does not count. */
+  isPadAHeld() {
+    return this._padButton(0);
   }
 
   /**
@@ -160,8 +172,8 @@ export class InputManager {
       ? "Esc: release mouse"
       : "Click for mouse look";
     const pad = this._padConnected
-      ? "Xbox connected — left stick walks, right stick looks, A jumps, X toggles the chapel door"
-      : "Xbox: left stick walks, right stick looks, A jumps, X toggles the chapel door";
+      ? "Xbox connected — left stick walks, right stick looks, hold A at the ladder to climb, A jumps away from it, X toggles the chapel door"
+      : "Xbox: left stick walks, right stick looks, hold A at the ladder to climb, A jumps away from it, X toggles the chapel door";
     hud.textContent = `${look}  |  WASD or arrows: walk  |  Space: jump  |  F: toggle chapel door  |  Mouse: look  |  ${pad}`;
   }
 }

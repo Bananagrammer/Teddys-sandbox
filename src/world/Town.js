@@ -14,6 +14,7 @@ import {
   LAMPS,
   WELL,
   TREE_HOUSE,
+  TREE_LADDER,
   GROUND_SIZE,
   PLAZA_HALF,
   roadDecals,
@@ -806,13 +807,13 @@ export class Town {
 
   /**
    * Cabin in the northeast meadow. The trunk collider stops him on the ground
-   * and again where it comes up through the floor. The stair is a straight
-   * run of boxes the existing hop can clear. No plaque — not a numbered house.
+   * and again where it comes up through the floor. A ladder on the south edge,
+   * west of the trunk, is the way onto the deck. No plaque — not a numbered house.
    */
   _treeHouse(spec) {
     const { x, z } = spec;
     const name = "treeHouse";
-    const deckTop = 3.2;
+    const deckTop = TREE_LADDER.deckTop;
     const deckH = 0.22;
     const deck = { x0: 157.35, x1: 162.45, z0: 157.35, z1: 162.75 };
     const deckCx = (deck.x0 + deck.x1) / 2;
@@ -948,31 +949,7 @@ export class Town {
     roof.receiveShadows = true;
     this.scene._shadowGenerator?.addShadowCaster(roof);
 
-    // West of the trunk, so the trunk stays visible from the south.
-    // Each box is a full riser the 0.8 m hop clears, and the top meets the deck.
-    const stepCount = 8;
-    const riser = deckTop / stepCount;
-    const stepW = 1.3;
-    const stepD = 1.32;
-    const spacing = 1.02;
-    const stepX = 158.15;
-    const topNorth = deck.z0 - 0.05;
-    const topCenterZ = topNorth - stepD / 2;
-    for (let i = 0; i < stepCount; i += 1) {
-      const fromTop = stepCount - 1 - i;
-      const top = (i + 1) * riser;
-      this._solidBox(
-        `${name}Step${i}`,
-        stepW,
-        top,
-        stepD,
-        stepX,
-        top / 2,
-        topCenterZ - fromTop * spacing,
-        timber,
-        1.1,
-      );
-    }
+    this._treeLadder(name, timber);
 
     this._limb(name, 0, x, 3.35, z, 163.4, 5.15, 162.1, 0.34);
     this._limb(name, 1, x, 3.45, z, 161.4, 5.7, 164.0, 0.32);
@@ -999,6 +976,62 @@ export class Town {
       leaf.receiveShadows = true;
       leaf.isPickable = false;
       this.scene._shadowGenerator?.addShadowCaster(leaf);
+    }
+  }
+
+  /**
+   * Two side rails with physics, and rungs with none, so he cannot walk through
+   * the ladder but a kinematic climb in front of it is not fighting the rungs.
+   * Rails stop at the deck so the path over the lip stays clear.
+   */
+  _treeLadder(name, timber) {
+    const ladderX = TREE_LADDER.x;
+    const railZ = TREE_LADDER.z;
+    const deckTop = TREE_LADDER.deckTop;
+    const spread = 0.22;
+    const railT = 0.07;
+    const railD = 0.08;
+    const railH = deckTop;
+    this._solidBox(
+      `${name}LadderRailL`,
+      railT,
+      railH,
+      railD,
+      ladderX - spread,
+      railH / 2,
+      railZ,
+      timber,
+      0.5,
+    );
+    this._solidBox(
+      `${name}LadderRailR`,
+      railT,
+      railH,
+      railD,
+      ladderX + spread,
+      railH / 2,
+      railZ,
+      timber,
+      0.5,
+    );
+
+    const rungLen = spread * 2 - railT;
+    const rungCount = 10;
+    const y0 = 0.34;
+    const y1 = deckTop - 0.16;
+    for (let i = 0; i < rungCount; i += 1) {
+      const y = y0 + ((y1 - y0) * i) / (rungCount - 1);
+      const rung = MeshBuilder.CreateCylinder(`${name}LadderRung${i}`, {
+        height: rungLen,
+        diameter: 0.05,
+        tessellation: 8,
+      }, this.scene);
+      rung.rotation.z = Math.PI / 2;
+      rung.position.set(ladderX, y, railZ);
+      rung.material = timber;
+      rung.isPickable = false;
+      rung.receiveShadows = true;
+      this.scene._shadowGenerator?.addShadowCaster(rung);
     }
   }
 

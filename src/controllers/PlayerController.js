@@ -3,12 +3,17 @@ import { Ray } from "@babylonjs/core/Culling/ray";
 import { UniversalCamera } from "@babylonjs/core/Cameras/universalCamera";
 import { DefaultRenderingPipeline } from "@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline";
 
+import { TREE_LADDER } from "../world/townLayout.js";
+
 const MOVE_SPEED = 5;
 const MOUSE_SENS = 0.0025;
 const STICK_LOOK = 3.0;
 const PITCH_LIMIT = 1.15;
 // v^2 / (2g) ≈ 0.8 m at 9.81. A hop, not a climb.
 const JUMP_SPEED = 4;
+// Holding A in front of the ladder. A tap is only a few centimeters.
+const CLIMB_SPEED = 1.45;
+const MOUNT_SPEED = 2.4;
 // Ray starts a little above the feet so it is not born inside the plaza decal,
 // and only a short gap under the feet still counts as standing.
 const GROUND_START = 0.12;
@@ -32,8 +37,31 @@ export class PlayerController {
     this.pitch = 0;
     this.ready = false;
     this.grounded = false;
+    this.climbing = false;
+    this._mounting = false;
+    this._wasClimbing = false;
+    this._pendingPlace = null;
     this._frames = 0;
     this._groundRay = new Ray(new Vector3(), new Vector3(0, -1, 0), GROUND_START + GROUND_PROBE);
+    const standY = TREE_LADDER.deckTop + boy.halfHeight;
+    this.ladder = {
+      x: TREE_LADDER.x,
+      z: TREE_LADDER.z,
+      deckTop: TREE_LADDER.deckTop,
+      climb: TREE_LADDER.climb,
+      standX: TREE_LADDER.standX,
+      standZ: TREE_LADDER.standZ,
+      standY,
+      // Feet clear the rail tops before he slides onto the deck.
+      clearY: standY + 0.18,
+    };
+  }
+
+  /** Dev hook. Applied on the next update so physics teleports with it. */
+  place(x, y, z) {
+    this._pendingPlace = { x, y, z };
+    this._mounting = false;
+    this._wasClimbing = false;
   }
 
   attach() {
@@ -81,19 +109,71 @@ export class PlayerController {
     const currentVel = body.getLinearVelocity();
     if (!currentVel) return;
     const vertical = currentVel.y;
+    // Physics already stepped this frame. A teleport flag set here is consumed
+    // on the next step, so leave it false only when this update moves the mesh.
+    body.disablePreStep = true;
 
     const move = this.input.getMoveAxes();
     const jump = this.input.consumeJump();
+    const padA = this.input.isPadAHeld();
     this.grounded = this._isGrounded(vertical);
     const sin = Math.sin(this.yaw);
     const cos = Math.cos(this.yaw);
-    const vx = (sin * move.y + cos * move.x) * MOVE_SPEED;
-    const vz = (cos * move.y - sin * move.x) * MOVE_SPEED;
-    const vy = jump && this.grounded ? JUMP_SPEED : vertical;
+    let vx = (sin * move.y + cos * move.x) * MOVE_SPEED;
+    let vz = (cos * move.y - sin * move.x) * MOVE_SPEED;
+    let vy = vertical;
+
+    const pos = this.boy.capsuleMesh.position;
+    const atLadder = this._inClimbColumn(pos.x, pos.z);
+    let climbing = false;
+
+    if (this._pendingPlace) {
+      const spot = this._pendingPlace;
+      this._pendingPlace = null;
+      this._mounting = false;
+      this._wasClimbing = false;
+      pos.set(spot.x, spot.y, spot.z);
+      body.disablePreStep = false;
+      body.setGravityFactor(1);
+      vx = 0;
+      vy = 0;
+      vz = 0;
+    } else if (padA && this._mounting) {
+      const mounted = this._slideOntoDeck(body, pos, dt);
+      climbing = !mounted;
+      vx = this._slideVx;
+      vy = this._slideVy;
+      vz = this._slideVz;
+    } else if (padA && atLadder && pos.y < this.ladder.clearY - 0.02) {
+      const nextX = pos.x + vx * dt;
+      const nextZ = pos.z + vz * dt;
+      const walkingOff = (vx !== 0 || vz !== 0) && !this._inClimbColumn(nextX, nextZ);
+      if (walkingOff) {
+        this._stopClimb(body);
+        if (this._wasClimbing && vy > 0) vy = 0;
+      } else {
+        // A climbs here. It must not also add the hop impulse.
+        climbing = true;
+        body.setGravityFactor(0);
+        vy = CLIMB_SPEED;
+        if (pos.y + CLIMB_SPEED * Math.max(dt, 1 / 60) >= this.ladder.clearY - 0.03) {
+          this._mounting = true;
+        }
+      }
+    } else {
+      this._stopClimb(body);
+      const endedClimb = this._wasClimbing || this._mounting;
+      this._mounting = false;
+      if (this.grounded && (jump.space || (jump.pad && !atLadder))) vy = JUMP_SPEED;
+      else if (endedClimb && vy > 0) vy = 0;
+    }
+
+    this.climbing = climbing;
+    this._wasClimbing = climbing;
+
     body.setLinearVelocity(new Vector3(vx, vy, vz));
     body.setAngularVelocity(Vector3.Zero());
 
-    const pos = this.boy.capsuleMesh.position;
     this.boy.root.position.set(pos.x, pos.y - this.boy.halfHeight, pos.z);
     this.boy.root.rotation.y = this.yaw;
 
@@ -107,6 +187,43 @@ export class PlayerController {
 
     this._frames += 1;
     if (this._frames > 10) this.ready = true;
+  }
+
+  _inClimbColumn(x, z) {
+    const box = this.ladder.climb;
+    return x >= box.x0 && x <= box.x1 && z >= box.z0 && z <= box.z1;
+  }
+
+  _stopClimb(body) {
+    body.setGravityFactor(1);
+  }
+
+  /**
+   * Slide from the top of the ladder onto the deck while A stays held.
+   * Returns true once he has been set down on the deck.
+   */
+  _slideOntoDeck(body, pos, dt) {
+    const ladder = this.ladder;
+    const dx = ladder.standX - pos.x;
+    const dz = ladder.standZ - pos.z;
+    const dist = Math.hypot(dx, dz);
+    if (dist < 0.14) {
+      pos.set(ladder.standX, ladder.standY, ladder.standZ);
+      body.disablePreStep = false;
+      body.setGravityFactor(1);
+      this._mounting = false;
+      this._slideVx = 0;
+      this._slideVy = 0;
+      this._slideVz = 0;
+      return true;
+    }
+    body.setGravityFactor(0);
+    const speed = Math.min(MOUNT_SPEED, dist / Math.max(dt, 1e-4));
+    this._slideVx = (dx / dist) * speed;
+    this._slideVz = (dz / dist) * speed;
+    const dy = ladder.clearY - pos.y;
+    this._slideVy = Math.max(-CLIMB_SPEED, Math.min(CLIMB_SPEED, dy / Math.max(dt, 1e-4)));
+    return false;
   }
 
   /**

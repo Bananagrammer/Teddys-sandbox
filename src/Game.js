@@ -66,6 +66,10 @@ export class Game {
           return { buildings: town.buildingCount, trees: town.treeCount };
         },
         get hud() { return document.getElementById("hud")?.textContent ?? ""; },
+        get climbing() { return controller.climbing; },
+        get ladder() { return controller.ladder; },
+        get meshNames() { return boy.scene.meshes.map((mesh) => mesh.name); },
+        place(x, y, z) { controller.place(x, y, z); },
         get door() {
           const door = town.chapelDoor;
           if (!door) return null;
