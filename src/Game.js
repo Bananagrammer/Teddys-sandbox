@@ -27,6 +27,15 @@ export class Game {
     const controller = new PlayerController(boy, input, this.scene);
     controller.attach();
 
+    this.scene.onBeforeRenderObservable.add(() => {
+      const dt = Math.min(this.engine.getDeltaTime() / 1000, 0.05);
+      if (input.consumeDoor()) {
+        const p = boy.capsuleMesh.position;
+        town.tryOpenChapelDoor(p.x, p.z);
+      }
+      town.updateChapelDoor(dt);
+    });
+
     if (import.meta.env.DEV) {
       window.__player = {
         get position() {
@@ -57,6 +66,25 @@ export class Game {
           return { buildings: town.buildingCount, trees: town.treeCount };
         },
         get hud() { return document.getElementById("hud")?.textContent ?? ""; },
+        get door() {
+          const door = town.chapelDoor;
+          if (!door) return null;
+          const p = boy.capsuleMesh.position;
+          const q = door.mesh.rotationQuaternion;
+          return {
+            opened: door.opened,
+            opening: door.opening,
+            angle: door.angle,
+            facing: door.facing,
+            anchorX: door.anchorX,
+            anchorZ: door.anchorZ,
+            distance: Math.hypot(p.x - door.anchorX, p.z - door.anchorZ),
+            meshX: door.mesh.position.x,
+            meshY: door.mesh.position.y,
+            meshZ: door.mesh.position.z,
+            yaw: q ? q.toEulerAngles().y : door.mesh.rotation.y,
+          };
+        },
       };
     }
 

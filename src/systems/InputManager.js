@@ -4,6 +4,7 @@ const DEADZONE = 0.18;
  * Keyboard, mouse, and standard-mapping gamepads (Xbox layout).
  * Left stick / WASD walk. Right stick / mouse look.
  * Jump is Xbox A (button 0) or Space, edge-triggered.
+ * The chapel door is Xbox X (button 2) or F, edge-triggered, and only while near it.
  * Axes follow the W3C standard gamepad mapping:
  * 0 left X, 1 left Y (up is negative), 2 right X, 3 right Y (up is negative).
  * Buttons: 0 is the bottom face button (A on Xbox).
@@ -17,6 +18,7 @@ export class InputManager {
     this.pointerLocked = false;
     this._padConnected = false;
     this._jumpHeld = false;
+    this._doorHeld = false;
 
     document.addEventListener("keydown", (e) => {
       this.keys.add(e.code);
@@ -115,6 +117,17 @@ export class InputManager {
     return edge;
   }
 
+  /**
+   * True on the frame F or Xbox X (standard button 2) goes down.
+   * Holding either does not keep returning true. A and Space are not this action.
+   */
+  consumeDoor() {
+    const down = this.isDown("KeyF") || this._padButton(2);
+    const edge = down && !this._doorHeld;
+    this._doorHeld = down;
+    return edge;
+  }
+
   _padButton(index) {
     const pad = this._standardPad();
     const button = pad?.buttons?.[index];
@@ -145,9 +158,9 @@ export class InputManager {
       ? "Esc: release mouse"
       : "Click for mouse look";
     const pad = this._padConnected
-      ? "Xbox connected — left stick walks, right stick looks, A jumps"
-      : "Xbox: left stick walks, right stick looks, A jumps";
-    hud.textContent = `${look}  |  WASD or arrows: walk  |  Space: jump  |  Mouse: look  |  ${pad}`;
+      ? "Xbox connected — left stick walks, right stick looks, A jumps, X opens the chapel door"
+      : "Xbox: left stick walks, right stick looks, A jumps, X opens the chapel door";
+    hud.textContent = `${look}  |  WASD or arrows: walk  |  Space: jump  |  F: chapel door  |  Mouse: look  |  ${pad}`;
   }
 }
 
