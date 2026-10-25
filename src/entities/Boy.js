@@ -34,7 +34,7 @@ export class Boy {
       tessellation: 8,
     }, this.scene);
     this.capsuleMesh.isVisible = false;
-    // Feet rest on the ground (y = 0). South of the well, already in the plaza, facing it.
+    // Feet rest on the ground (y = 0). Inside house 48, on open floor, facing north.
     this.capsuleMesh.position = new Vector3(SPAWN.x, this.halfHeight, SPAWN.z);
 
     this.physicsBody = new PhysicsAggregate(

@@ -7,10 +7,11 @@ export const GROUND_SIZE = 340;
 export const GROUND_HALF = GROUND_SIZE / 2;
 export const ROAD_LIMIT = 158;
 
-// Well cylinder matches Town._well (diameter 2.1). Spawn is south of it, on the plaza.
+// Well cylinder matches Town._well (diameter 2.1). The boy starts inside house 48
+// (mesh house47), on open floor just inside the south door, facing north.
 export const WELL = { x: 0, z: 0 };
 export const WELL_RADIUS = 1.05;
-export const SPAWN = { x: 0, z: -6.5 };
+export const SPAWN = { x: 144.4, z: 127.9 };
 
 // Four corners of the square, inset so they read as plaza lamps and stay off the streets.
 export const LAMPS = [
@@ -348,11 +349,16 @@ function gapBetween(a, b) {
 export function validateLayout(buildings = BUILDINGS, trees = TREES) {
   const problems = [];
   if (WELL.x !== 0 || WELL.z !== 0) problems.push("well is not at the origin");
-  if (!(SPAWN.z < WELL.z)) problems.push("spawn is not south of the well");
-  const spawnDist = Math.hypot(SPAWN.x - WELL.x, SPAWN.z - WELL.z);
-  if (spawnDist < WELL_RADIUS + 2) problems.push(`spawn is too close to the well (${spawnDist})`);
-  if (Math.abs(SPAWN.x) > PLAZA_HALF - 1 || Math.abs(SPAWN.z) > PLAZA_HALF - 1) {
-    problems.push("spawn is outside the plaza");
+  // Wall is 0.34 m and the capsule radius is 0.28 m, so the center has to sit
+  // at least that far inside the outer shell or he starts in the wall.
+  const house48 = buildings.find((b) => b.name === "house47" && b.furnished);
+  if (!house48) {
+    problems.push("house 48 is missing");
+  } else {
+    const inset = 0.34 + 0.28;
+    const insideX = Math.abs(SPAWN.x - house48.x) < house48.w / 2 - inset;
+    const insideZ = Math.abs(SPAWN.z - house48.z) < house48.d / 2 - inset;
+    if (!insideX || !insideZ) problems.push("spawn is not standing inside house 48");
   }
   if (LAMPS.length !== 4) problems.push("expected four lamps");
 
