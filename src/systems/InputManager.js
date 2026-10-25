@@ -5,6 +5,7 @@ const DEADZONE = 0.18;
  * Left stick / WASD walk. Right stick / mouse look.
  * Jump is Xbox A (button 0) or Space, edge-triggered.
  * The chapel door is Xbox X (button 2) or F, edge-triggered, and only while near it.
+ * One press opens the door; the next press closes it.
  * Axes follow the W3C standard gamepad mapping:
  * 0 left X, 1 left Y (up is negative), 2 right X, 3 right Y (up is negative).
  * Buttons: 0 is the bottom face button (A on Xbox).
@@ -120,6 +121,7 @@ export class InputManager {
   /**
    * True on the frame F or Xbox X (standard button 2) goes down.
    * Holding either does not keep returning true. A and Space are not this action.
+   * Near the chapel door, that edge toggles the leaf open or shut.
    */
   consumeDoor() {
     const down = this.isDown("KeyF") || this._padButton(2);
@@ -158,9 +160,9 @@ export class InputManager {
       ? "Esc: release mouse"
       : "Click for mouse look";
     const pad = this._padConnected
-      ? "Xbox connected — left stick walks, right stick looks, A jumps, X opens the chapel door"
-      : "Xbox: left stick walks, right stick looks, A jumps, X opens the chapel door";
-    hud.textContent = `${look}  |  WASD or arrows: walk  |  Space: jump  |  F: chapel door  |  Mouse: look  |  ${pad}`;
+      ? "Xbox connected — left stick walks, right stick looks, A jumps, X toggles the chapel door"
+      : "Xbox: left stick walks, right stick looks, A jumps, X toggles the chapel door";
+    hud.textContent = `${look}  |  WASD or arrows: walk  |  Space: jump  |  F: toggle chapel door  |  Mouse: look  |  ${pad}`;
   }
 }
 

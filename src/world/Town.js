@@ -346,6 +346,7 @@ export class Town {
       angle: 0,
       openAngle: CHAPEL_OPEN_ANGLE,
       opening: false,
+      closing: false,
       opened: false,
       anchorX,
       anchorZ,
@@ -375,28 +376,39 @@ export class Town {
   }
 
   /**
-   * Edge already happened. Opens only when the boy is within a few meters
-   * of the doorway. One swing; it stays open.
+   * Edge already happened. Toggles only when the boy is within a few meters
+   * of the doorway and the leaf is not already swinging.
+   * A press while it is shut swings it open; the next press swings it shut
+   * so the leaf blocks the doorway again.
    */
-  tryOpenChapelDoor(px, pz) {
+  tryToggleChapelDoor(px, pz) {
     const door = this.chapelDoor;
-    if (!door || door.opened || door.opening) return false;
+    if (!door || door.opening || door.closing) return false;
     if (Math.hypot(px - door.anchorX, pz - door.anchorZ) > CHAPEL_DOOR_REACH) return false;
-    door.opening = true;
+    if (door.opened) door.closing = true;
+    else door.opening = true;
     return true;
   }
 
   updateChapelDoor(dt) {
     const door = this.chapelDoor;
-    if (!door?.opening) return;
-    door.angle = Math.min(door.openAngle, door.angle + CHAPEL_SWING_SPEED * dt);
-    this._poseChapelDoor();
-    if (door.angle >= door.openAngle - 1e-4) {
-      door.angle = door.openAngle;
-      door.opening = false;
-      door.opened = true;
-      this._poseChapelDoor();
+    if (!door || (!door.opening && !door.closing)) return;
+    if (door.closing) {
+      door.angle = Math.max(0, door.angle - CHAPEL_SWING_SPEED * dt);
+      if (door.angle <= 1e-4) {
+        door.angle = 0;
+        door.closing = false;
+        door.opened = false;
+      }
+    } else {
+      door.angle = Math.min(door.openAngle, door.angle + CHAPEL_SWING_SPEED * dt);
+      if (door.angle >= door.openAngle - 1e-4) {
+        door.angle = door.openAngle;
+        door.opening = false;
+        door.opened = true;
+      }
     }
+    this._poseChapelDoor();
   }
 
   /**

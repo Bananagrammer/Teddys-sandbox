@@ -31,7 +31,7 @@ export class Game {
       const dt = Math.min(this.engine.getDeltaTime() / 1000, 0.05);
       if (input.consumeDoor()) {
         const p = boy.capsuleMesh.position;
-        town.tryOpenChapelDoor(p.x, p.z);
+        town.tryToggleChapelDoor(p.x, p.z);
       }
       town.updateChapelDoor(dt);
     });
@@ -74,6 +74,7 @@ export class Game {
           return {
             opened: door.opened,
             opening: door.opening,
+            closing: door.closing,
             angle: door.angle,
             facing: door.facing,
             anchorX: door.anchorX,
