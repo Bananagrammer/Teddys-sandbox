@@ -54,8 +54,11 @@ export class Boy {
     const pants = this._mat("boyPants", 0.29, 0.27, 0.25, 0.03);
     const shoes = this._mat("boyShoes", 0.15, 0.12, 0.1, 0.04);
 
-    this._box("hip", 0.34, 0.18, 0.18, 0, 0.72, 0, pants);
-    this._box("torso", 0.36, 0.42, 0.2, 0, 1.02, 0, this._shirt);
+    // The shirt used to stand on the eye column. Looking down then put
+    // that blue chest across the middle of the view, hiding the floor.
+    // Chest, hips, and legs sit just behind the eyes.
+    this._box("hip", 0.34, 0.18, 0.18, 0, 0.72, -0.14, pants);
+    this._box("torso", 0.36, 0.42, 0.2, 0, 1.02, -0.2, this._shirt);
 
     for (const [side, x] of [["L", -0.1], ["R", 0.1]]) {
       const leg = MeshBuilder.CreateCylinder(`leg${side}`, {
@@ -64,10 +67,10 @@ export class Boy {
         tessellation: 8,
       }, this.scene);
       leg.parent = this.root;
-      leg.position.set(x, 0.3, 0);
+      leg.position.set(x, 0.3, -0.06);
       leg.material = pants;
 
-      this._box(`shoe${side}`, 0.12, 0.06, 0.22, x, 0.04, 0.04, shoes);
+      this._box(`shoe${side}`, 0.12, 0.06, 0.22, x, 0.04, -0.02, shoes);
     }
 
     this._castShadows(this.root);
