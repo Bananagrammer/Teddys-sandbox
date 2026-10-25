@@ -37,6 +37,11 @@ export class Game {
         get pitch() { return controller.pitch; },
         get look() { return controller.getLookDirection(); },
         get ready() { return controller.ready; },
+        get grounded() { return controller.grounded; },
+        get velocity() {
+          const v = boy.physicsBody.body.getLinearVelocity();
+          return v ? { x: v.x, y: v.y, z: v.z } : { x: 0, y: 0, z: 0 };
+        },
         get lamps() {
           return town.lamps.map((lamp) => ({
             x: lamp.x,

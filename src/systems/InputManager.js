@@ -3,8 +3,10 @@ const DEADZONE = 0.18;
 /**
  * Keyboard, mouse, and standard-mapping gamepads (Xbox layout).
  * Left stick / WASD walk. Right stick / mouse look.
+ * Jump is Xbox A (button 0) or Space, edge-triggered.
  * Axes follow the W3C standard gamepad mapping:
  * 0 left X, 1 left Y (up is negative), 2 right X, 3 right Y (up is negative).
+ * Buttons: 0 is the bottom face button (A on Xbox).
  */
 export class InputManager {
   constructor(canvas) {
@@ -13,11 +15,12 @@ export class InputManager {
     this.mouseDeltaX = 0;
     this.mouseDeltaY = 0;
     this.pointerLocked = false;
-  this._padConnected = false;
+    this._padConnected = false;
+    this._jumpHeld = false;
 
     document.addEventListener("keydown", (e) => {
       this.keys.add(e.code);
-      if (e.code.startsWith("Arrow")) e.preventDefault();
+      if (e.code.startsWith("Arrow") || e.code === "Space") e.preventDefault();
     });
     document.addEventListener("keyup", (e) => {
       this.keys.delete(e.code);
@@ -101,6 +104,24 @@ export class InputManager {
     return { mouseX, mouseY, stickX, stickY };
   }
 
+  /**
+   * True on the frame Space or Xbox A goes down. Holding either
+   * does not keep returning true.
+   */
+  consumeJump() {
+    const down = this.isDown("Space") || this._padButton(0);
+    const edge = down && !this._jumpHeld;
+    this._jumpHeld = down;
+    return edge;
+  }
+
+  _padButton(index) {
+    const pad = this._standardPad();
+    const button = pad?.buttons?.[index];
+    if (!button) return false;
+    return button.pressed === true || button.value >= 0.5;
+  }
+
   _standardPad() {
     const pads = typeof navigator.getGamepads === "function" ? navigator.getGamepads() : [];
     for (const pad of pads) {
@@ -124,9 +145,9 @@ export class InputManager {
       ? "Esc: release mouse"
       : "Click for mouse look";
     const pad = this._padConnected
-      ? "Xbox connected — left stick walks, right stick looks"
-      : "Xbox: left stick walks, right stick looks";
-    hud.textContent = `${look}  |  WASD or arrows: walk  |  Mouse: look  |  ${pad}`;
+      ? "Xbox connected — left stick walks, right stick looks, A jumps"
+      : "Xbox: left stick walks, right stick looks, A jumps";
+    hud.textContent = `${look}  |  WASD or arrows: walk  |  Space: jump  |  Mouse: look  |  ${pad}`;
   }
 }
 
