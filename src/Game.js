@@ -45,6 +45,12 @@ export class Game {
             intensity: lamp.light.intensity,
           }));
         },
+        get well() {
+          return { x: town.wellX, z: town.wellZ };
+        },
+        get counts() {
+          return { buildings: town.buildingCount, trees: town.treeCount };
+        },
         get hud() { return document.getElementById("hud")?.textContent ?? ""; },
       };
     }

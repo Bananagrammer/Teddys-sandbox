@@ -4,6 +4,7 @@ import { Color3 } from "@babylonjs/core/Maths/math.color";
 import { Quaternion, Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { TransformNode } from "@babylonjs/core/Meshes/transformNode";
 import { PhysicsAggregate, PhysicsShapeType } from "@babylonjs/core/Physics/v2";
+import { SPAWN } from "../world/townLayout.js";
 
 const CAPSULE_HEIGHT = 1.6;
 const CAPSULE_RADIUS = 0.28;
@@ -33,8 +34,8 @@ export class Boy {
       tessellation: 8,
     }, this.scene);
     this.capsuleMesh.isVisible = false;
-    // Feet rest on the ground (y = 0). The player is already in the plaza.
-    this.capsuleMesh.position = new Vector3(0, this.halfHeight, 0);
+    // Feet rest on the ground (y = 0). South of the well, already in the plaza, facing it.
+    this.capsuleMesh.position = new Vector3(SPAWN.x, this.halfHeight, SPAWN.z);
 
     this.physicsBody = new PhysicsAggregate(
       this.capsuleMesh,
@@ -77,31 +78,25 @@ export class Boy {
     this.handsRoot = new TransformNode("handsRoot", this.scene);
 
     for (const [side, x] of [["L", -1], ["R", 1]]) {
-      const forearm = this._box(
-        `forearm${side}`,
-        0.05,
-        0.05,
-        0.18,
-        x * 0.24,
-        -0.18,
-        0.7,
-        this._shirt,
-        this.handsRoot
-      );
-      forearm.rotation.x = 0.35;
+      const forearm = MeshBuilder.CreateCylinder(`forearm${side}`, {
+        height: 0.16,
+        diameter: 0.046,
+        tessellation: 8,
+      }, this.scene);
+      forearm.parent = this.handsRoot;
+      forearm.position.set(x * 0.24, -0.32, 0.46);
+      forearm.rotation.x = 1.15;
+      forearm.rotation.z = x * -0.55;
+      forearm.material = this._shirt;
 
-      const hand = this._box(
-        `hand${side}`,
-        0.055,
-        0.032,
-        0.08,
-        x * 0.23,
-        -0.15,
-        0.8,
-        this._skin,
-        this.handsRoot
-      );
-      hand.rotation.x = 0.15;
+      const hand = MeshBuilder.CreateSphere(`hand${side}`, {
+        diameter: 0.058,
+        segments: 8,
+      }, this.scene);
+      hand.parent = this.handsRoot;
+      hand.position.set(x * 0.28, -0.34, 0.52);
+      hand.scaling.set(1.05, 0.75, 1.15);
+      hand.material = this._skin;
     }
 
     this._castShadows(this.handsRoot);

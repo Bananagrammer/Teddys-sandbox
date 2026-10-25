@@ -1,5 +1,6 @@
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { UniversalCamera } from "@babylonjs/core/Cameras/universalCamera";
+import { DefaultRenderingPipeline } from "@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline";
 
 const MOVE_SPEED = 5;
 const MOUSE_SENS = 0.0025;
@@ -32,12 +33,22 @@ export class PlayerController {
     );
     this.camera.fov = 1.15;
     this.camera.minZ = 0.08;
-    this.camera.maxZ = 250;
+    this.camera.maxZ = 1200;
     this.camera.inertia = 0;
     this.scene.activeCamera = this.camera;
 
     this.boy.attachHands();
+    this._lookPipeline();
     this.scene.onBeforeRenderObservable.add(() => this._update());
+  }
+
+  _lookPipeline() {
+    const pipeline = new DefaultRenderingPipeline("townLook", true, this.scene, [this.camera]);
+    pipeline.fxaaEnabled = true;
+    pipeline.bloomEnabled = false;
+    pipeline.imageProcessingEnabled = true;
+    pipeline.imageProcessing.contrast = 1.06;
+    pipeline.imageProcessing.exposure = 1.0;
   }
 
   getLookDirection() {
