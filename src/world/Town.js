@@ -5,6 +5,8 @@ import { Quaternion, Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { PointLight } from "@babylonjs/core/Lights/pointLight";
 import { PhysicsAggregate, PhysicsMotionType, PhysicsShapeType } from "@babylonjs/core/Physics/v2";
 import { VertexBuffer } from "@babylonjs/core/Buffers/buffer";
+import { DynamicTexture } from "@babylonjs/core/Materials/Textures/dynamicTexture";
+import { Texture } from "@babylonjs/core/Materials/Textures/texture";
 import { SurfaceTextures, boxFaceUV } from "../graphics/SurfaceTextures.js";
 import {
   BUILDINGS,
@@ -59,6 +61,7 @@ export class Town {
     this._waterMat = this._mat("water", 1, 1, 1, 0.7, this.textures.water);
     this._waterMat.specularPower = 64;
     this._waterMat.emissiveColor = new Color3(0.02, 0.06, 0.08);
+    this._plaqueFrameMat = this._mat("plaqueFrame", 0.22, 0.16, 0.12, 0.04);
 
     validateLayout();
     this.buildingCount = BUILDINGS.length;
@@ -68,7 +71,7 @@ export class Town {
 
     this._ground();
     this._streets();
-    for (const spec of BUILDINGS) this._building(spec);
+    BUILDINGS.forEach((spec, index) => this._building(spec, index + 1));
     this._well(WELL.x, WELL.z);
     TREES.forEach(([x, z], i) => this._tree(i, x, z));
     this.lamps = LAMPS.map(([x, z], i) => this._lamp(i, x, z));
@@ -119,7 +122,7 @@ export class Town {
     return mesh;
   }
 
-  _building(spec) {
+  _building(spec, houseNumber) {
     const { name, x, z, w, d, h, wall, roof, door, awning, steeple } = spec;
     const wallMat = this._mat(`${name}Wall`, wall[0], wall[1], wall[2], 0.04, this.textures.plaster);
     const roofMat = this._mat(`${name}Roof`, roof[0], roof[1], roof[2], 0.05, this.textures.roof);
@@ -188,6 +191,83 @@ export class Town {
       this._steeple(name, x, z, h);
       this._chapelNave(name, x, z, w, d, door);
     }
+    this._housePlaque(spec, houseNumber);
+  }
+
+  /**
+   * Number 1..building count, in layout order, on the front wall above the door.
+   * Shops sit a little higher so the awning does not hide the digits from the street.
+   * CreatePlane faces -Z; yaw turns that face toward the street.
+   */
+  _housePlaque(spec, houseNumber) {
+    const { name, x, z, w, d, door, awning } = spec;
+    const plaqueW = 1.08;
+    const plaqueH = 0.7;
+    const frameT = 0.06;
+    const y = awning ? 3.36 : 2.68;
+
+    const frameOut = this._faceOffset(door, w, d, 0.012 + frameT / 2);
+    const frame = MeshBuilder.CreateBox(`${name}NumberFrame`, {
+      width: frameOut.alongX ? frameT : plaqueW + 0.12,
+      height: plaqueH + 0.12,
+      depth: frameOut.alongX ? plaqueW + 0.12 : frameT,
+    }, this.scene);
+    frame.position.set(x + frameOut.x, y, z + frameOut.z);
+    frame.material = this._plaqueFrameMat;
+    frame.isPickable = false;
+    frame.receiveShadows = true;
+
+    const plateOut = this._faceOffset(door, w, d, 0.012 + frameT + 0.012);
+    const plate = MeshBuilder.CreatePlane(`${name}Number`, {
+      width: plaqueW,
+      height: plaqueH,
+    }, this.scene);
+    plate.position.set(x + plateOut.x, y, z + plateOut.z);
+    plate.rotation.y = this._plaqueYaw(door);
+    plate.material = this._plaqueMaterial(name, houseNumber);
+    plate.isPickable = false;
+    plate.metadata = { houseNumber };
+  }
+
+  _plaqueYaw(door) {
+    switch (door) {
+      case "north": return Math.PI;
+      case "east": return -Math.PI / 2;
+      case "west": return Math.PI / 2;
+      default: return 0;
+    }
+  }
+
+  _plaqueMaterial(name, houseNumber) {
+    const width = 512;
+    const height = 320;
+    const texture = new DynamicTexture(`${name}NumberTex`, { width, height }, this.scene, true);
+    texture.wrapU = Texture.CLAMP_ADDRESSMODE;
+    texture.wrapV = Texture.CLAMP_ADDRESSMODE;
+    const ctx = texture.getContext();
+    ctx.fillStyle = "#f4efe4";
+    ctx.fillRect(0, 0, width, height);
+    ctx.strokeStyle = "#241c16";
+    ctx.lineWidth = 22;
+    ctx.strokeRect(16, 16, width - 32, height - 32);
+    ctx.fillStyle = "#1a140e";
+    ctx.font = "bold 210px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(String(houseNumber), width / 2, height / 2 + 8);
+    texture.update(true);
+
+    const mat = new StandardMaterial(`${name}NumberMat`, this.scene);
+    // Unlit. The emissive color is added to the texture, so it stays black
+    // and the painted plaque is the whole color. A white emissive color
+    // would clamp the digits away.
+    mat.emissiveTexture = texture;
+    mat.emissiveColor = Color3.Black();
+    mat.diffuseColor = Color3.Black();
+    mat.specularColor = Color3.Black();
+    mat.disableLighting = true;
+    mat.backFaceCulling = true;
+    return mat;
   }
 
   /**
