@@ -94,7 +94,9 @@ export class Boy {
         segments: 8,
       }, this.scene);
       hand.parent = this.handsRoot;
-      hand.position.set(x * 0.28, -0.34, 0.52);
+      // Distal end of the tilted sleeve (local +Y), a little farther along the view
+      // so the hand sits in front of the forearm instead of underneath it.
+      hand.position.set(x * 0.303, -0.278, 0.553);
       hand.scaling.set(1.05, 0.75, 1.15);
       hand.material = this._skin;
     }
