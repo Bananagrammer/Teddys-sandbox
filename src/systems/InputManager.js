@@ -13,8 +13,7 @@ export class InputManager {
     this.mouseDeltaX = 0;
     this.mouseDeltaY = 0;
     this.pointerLocked = false;
-    this._padConnected = false;
-    this._interactHeld = false;
+  this._padConnected = false;
 
     document.addEventListener("keydown", (e) => {
       this.keys.add(e.code);
@@ -102,19 +101,6 @@ export class InputManager {
     return { mouseX, mouseY, stickX, stickY };
   }
 
-  /**
-   * True on the frame E or Xbox A goes down. Call once per frame.
-   * Button 0 is A on the standard gamepad mapping.
-   */
-  consumeInteract() {
-    const pad = this._standardPad();
-    const button = !!(pad && pad.buttons[0] && pad.buttons[0].pressed);
-    const down = this.isDown("KeyE") || button;
-    const fired = down && !this._interactHeld;
-    this._interactHeld = down;
-    return fired;
-  }
-
   _standardPad() {
     const pads = typeof navigator.getGamepads === "function" ? navigator.getGamepads() : [];
     for (const pad of pads) {
@@ -138,9 +124,9 @@ export class InputManager {
       ? "Esc: release mouse"
       : "Click for mouse look";
     const pad = this._padConnected
-      ? "Xbox connected — left stick walks, right stick looks, A lights a lamp"
-      : "Xbox: left stick walks, right stick looks, A lights a lamp";
-    hud.textContent = `${look}  |  WASD: walk  |  Mouse: look  |  E: light a lamp  |  ${pad}`;
+      ? "Xbox connected — left stick walks, right stick looks"
+      : "Xbox: left stick walks, right stick looks";
+    hud.textContent = `${look}  |  WASD or arrows: walk  |  Mouse: look  |  ${pad}`;
   }
 }
 

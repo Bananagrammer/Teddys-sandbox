@@ -192,7 +192,8 @@ export class Town {
     this.scene._shadowGenerator?.addShadowCaster(pole);
     new PhysicsAggregate(pole, PhysicsShapeType.CYLINDER, { mass: 0 }, this.scene);
 
-    const glassMat = this._mat(`lampGlassMat${index}`, 0.12, 0.12, 0.13, 0.05);
+    const glassMat = this._mat(`lampGlassMat${index}`, 1, 0.9, 0.55, 0.05);
+    glassMat.emissiveColor = new Color3(1, 0.72, 0.25);
     const glass = MeshBuilder.CreateSphere(`lampGlass${index}`, {
       diameter: 0.46,
       segments: 8,
@@ -202,21 +203,10 @@ export class Town {
 
     const light = new PointLight(`lampLight${index}`, new Vector3(x, 3.3, z), this.scene);
     light.diffuse = new Color3(1, 0.82, 0.45);
-    light.intensity = 0;
+    light.intensity = 1.5;
     light.range = 18;
 
-    return {
-      x,
-      z,
-      lit: false,
-      lightUp() {
-        if (this.lit) return;
-        this.lit = true;
-        glassMat.diffuseColor = new Color3(1, 0.9, 0.55);
-        glassMat.emissiveColor = new Color3(1, 0.72, 0.25);
-        light.intensity = 1.5;
-      },
-    };
+    return { x, z, lit: true, light };
   }
 
   _well(x, z) {
