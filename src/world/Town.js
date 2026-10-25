@@ -948,11 +948,14 @@ export class Town {
     roof.receiveShadows = true;
     this.scene._shadowGenerator?.addShadowCaster(roof);
 
+    // West of the trunk, so the trunk stays visible from the south.
+    // Each box is a full riser the 0.8 m hop clears, and the top meets the deck.
     const stepCount = 8;
     const riser = deckTop / stepCount;
-    const stepW = 1.7;
+    const stepW = 1.3;
     const stepD = 1.32;
     const spacing = 1.02;
+    const stepX = 158.15;
     const topNorth = deck.z0 - 0.05;
     const topCenterZ = topNorth - stepD / 2;
     for (let i = 0; i < stepCount; i += 1) {
@@ -963,7 +966,7 @@ export class Town {
         stepW,
         top,
         stepD,
-        doorX,
+        stepX,
         top / 2,
         topCenterZ - fromTop * spacing,
         timber,
@@ -975,8 +978,8 @@ export class Town {
     this._limb(name, 1, x, 3.45, z, 161.4, 5.7, 164.0, 0.32);
     this._limb(name, 2, x, 3.3, z, 157.7, 4.7, 163.2, 0.3);
     this._limb(name, 3, x, 3.25, z, 162.6, 6.25, 160.3, 0.28);
-    this._limb(name, 4, x, 2.7, z, 157.9, 2.86, 158.5, 0.42);
-    this._limb(name, 5, x, 2.65, z, 162.6, 2.86, 158.9, 0.38);
+    this._limb(name, 4, x, 2.7, z, 158.2, 2.86, 162.4, 0.42);
+    this._limb(name, 5, x, 2.65, z, 162.6, 2.86, 159.6, 0.38);
 
     const foliage = [
       [163.2, 5.15, 162.2, 2.2, this._leafMat],
