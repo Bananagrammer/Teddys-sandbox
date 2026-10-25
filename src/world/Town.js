@@ -125,6 +125,8 @@ export class Town {
     const roofMat = this._mat(`${name}Roof`, roof[0], roof[1], roof[2], 0.05, this.textures.roof);
 
     if (steeple) {
+      // Interior lamp shares these walls with the sun and the street lamps.
+      wallMat.maxSimultaneousLights = 8;
       this._chapelShell(name, x, z, w, d, h, wallMat, door);
     } else {
       const foundH = 0.46;
@@ -163,6 +165,9 @@ export class Town {
     this._repeatUvs(roofMesh, 4, 2);
     roofMesh.receiveShadows = true;
     this.scene._shadowGenerator?.addShadowCaster(roofMesh);
+    if (steeple) {
+      new PhysicsAggregate(roofMesh, PhysicsShapeType.BOX, { mass: 0, friction: 0.8 }, this.scene);
+    }
 
     const eave = MeshBuilder.CreateBox(`${name}Eave`, {
       width: w + 0.55,
@@ -179,7 +184,10 @@ export class Town {
     if (steeple) this._chapelDoor(name, x, z, w, d, door);
     else this._doorAndWindows(name, x, z, w, d, door);
     if (awning) this._awning(name, x, z, w, d, door);
-    if (steeple) this._steeple(name, x, z, h);
+    if (steeple) {
+      this._steeple(name, x, z, h);
+      this._chapelNave(name, x, z, w, d, door);
+    }
   }
 
   /**
@@ -217,6 +225,7 @@ export class Town {
     }, this.scene);
     ceiling.position.set(x, h - 0.14, z);
     ceiling.material = this._trimMat;
+    new PhysicsAggregate(ceiling, PhysicsShapeType.BOX, { mass: 0, friction: 0.8 }, this.scene);
 
     this._chapelWindows(name, x, z, w, d, door);
   }
@@ -390,6 +399,149 @@ export class Town {
     }
   }
 
+  /**
+   * Benches face the pulpit at the end opposite the door.
+   * `out` is toward the doorway, so the sermon place sits at negative out.
+   */
+  _chapelNave(name, x, z, w, d, door) {
+    const wallT = CHAPEL_WALL;
+    const ax = this._doorAxes(door);
+    const extentOut = ax.ox !== 0 ? w : d;
+    const innerOut = extentOut / 2 - wallT;
+    const spec = { x, z, door };
+    const lit = [];
+
+    const pewMat = this._mat(`${name}Pew`, 1, 1, 1, 0.06, this.textures.wood);
+    const linen = this._mat(`${name}Linen`, 0.9, 0.88, 0.82, 0.04);
+    const bookMat = this._mat(`${name}Book`, 0.34, 0.2, 0.14, 0.04, this.textures.wood);
+    const crossMat = this._mat(`${name}Cross`, 0.26, 0.18, 0.12, 0.04, this.textures.wood);
+    for (const mat of [pewMat, linen, bookMat, crossMat]) mat.maxSimultaneousLights = 8;
+
+    const furnish = (suffix, outLen, sideLen, height, outDist, sideDist, y, material, physics) => {
+      const mesh = this._chapelBox(
+        `${name}${suffix}`, spec, outLen, sideLen, height, outDist, sideDist, y, material,
+        { physics, shadow: physics, tile: 1.2 },
+      );
+      lit.push(mesh);
+      return mesh;
+    };
+
+    const floor = this.scene.getMeshByName(`${name}Floor`);
+    if (floor) {
+      lit.push(floor);
+      if (floor.material) floor.material.maxSimultaneousLights = 8;
+    }
+    for (const mesh of this.scene.meshes) {
+      if (!mesh.name.startsWith(name)) continue;
+      const part = mesh.name.slice(name.length);
+      if (part.startsWith("Wall") || part.startsWith("Jamb") || part === "Lintel") lit.push(mesh);
+    }
+
+    const aisle = 0.64;
+    const pewLen = 2.15;
+    const pewSide = aisle + pewLen / 2;
+    const benchOut = 0.38;
+    const row0 = innerOut - 0.9;
+    for (let row = 0; row < 3; row += 1) {
+      const outDist = row0 - row * 1.15;
+      for (const [suffix, side] of [["N", pewSide], ["S", -pewSide]]) {
+        furnish(`Pew${row}${suffix}`, benchOut, pewLen, 0.4, outDist, side, 0.25, pewMat, true);
+        furnish(
+          `PewBack${row}${suffix}`, 0.07, pewLen, 0.48,
+          outDist + benchOut / 2 - 0.035, side, 0.69, pewMat, true,
+        );
+      }
+    }
+
+    const stepOut = 1.15;
+    const stepCenter = -innerOut + 0.16 + stepOut / 2;
+    const stepFront = stepCenter + stepOut / 2;
+    furnish("PulpitStep", stepOut, 1.65, 0.16, stepCenter, 0, 0.13, pewMat, true);
+    const deskOut = stepFront - 0.28;
+    furnish("PulpitDesk", 0.42, 0.66, 0.98, deskOut, 0, 0.7, pewMat, true);
+    furnish("PulpitTop", 0.54, 0.84, 0.07, deskOut, 0, 1.225, linen, true);
+    const book = furnish("Book", 0.22, 0.3, 0.045, deskOut, 0, 1.285, bookMat, false);
+    book.isPickable = false;
+
+    const crossOut = -innerOut + 0.05;
+    const cross = furnish("CrossUpright", 0.08, 0.12, 1.6, crossOut, 0, 2.35, crossMat, false);
+    cross.isPickable = false;
+    const arm = furnish("CrossArm", 0.08, 0.76, 0.12, crossOut, 0, 2.68, crossMat, false);
+    arm.isPickable = false;
+
+    const candleMat = this._mat(`${name}Candle`, 0.95, 0.91, 0.8, 0.08);
+    candleMat.emissiveColor = new Color3(0.28, 0.22, 0.12);
+    candleMat.maxSimultaneousLights = 8;
+    const flameMat = this._mat(`${name}Flame`, 1, 0.72, 0.28, 0.1);
+    flameMat.emissiveColor = new Color3(1, 0.58, 0.16);
+    flameMat.disableLighting = true;
+    for (const [suffix, side] of [["L", 0.26], ["R", -0.26]]) {
+      const wax = MeshBuilder.CreateCylinder(`${name}Candle${suffix}`, {
+        height: 0.2,
+        diameter: 0.05,
+        tessellation: 8,
+      }, this.scene);
+      wax.position.copyFrom(this._chapelPoint(x, z, door, deskOut, side, 1.36));
+      wax.material = candleMat;
+      wax.isPickable = false;
+      lit.push(wax);
+      const flame = this._chapelBox(
+        `${name}Flame${suffix}`, spec, 0.05, 0.05, 0.07, deskOut, side, 1.49, flameMat,
+        { physics: false, shadow: false, tile: 0.2 },
+      );
+      flame.isPickable = false;
+    }
+
+    const light = new PointLight(`${name}Light`, this._chapelPoint(x, z, door, deskOut, 0, 1.9), this.scene);
+    light.diffuse = new Color3(1, 0.84, 0.58);
+    light.intensity = 1.6;
+    light.range = 9;
+    light.includedOnlyMeshes = lit;
+  }
+
+  _doorAxes(door) {
+    switch (door) {
+      case "north": return { ox: 0, oz: 1, sx: 1, sz: 0 };
+      case "south": return { ox: 0, oz: -1, sx: 1, sz: 0 };
+      case "east": return { ox: 1, oz: 0, sx: 0, sz: 1 };
+      case "west": return { ox: -1, oz: 0, sx: 0, sz: 1 };
+      default: return { ox: 0, oz: -1, sx: 1, sz: 0 };
+    }
+  }
+
+  _chapelPoint(x, z, door, outDist, sideDist, y) {
+    const ax = this._doorAxes(door);
+    return new Vector3(
+      x + ax.ox * outDist + ax.sx * sideDist,
+      y,
+      z + ax.oz * outDist + ax.sz * sideDist,
+    );
+  }
+
+  _chapelBox(name, spec, outLen, sideLen, height, outDist, sideDist, y, material, options) {
+    const ax = this._doorAxes(spec.door);
+    const width = Math.abs(ax.ox) * outLen + Math.abs(ax.sx) * sideLen;
+    const depth = Math.abs(ax.oz) * outLen + Math.abs(ax.sz) * sideLen;
+    const mesh = MeshBuilder.CreateBox(name, {
+      width,
+      height,
+      depth,
+      faceUV: boxFaceUV(width, height, depth, options.tile ?? 1.4),
+    }, this.scene);
+    mesh.position.set(
+      spec.x + ax.ox * outDist + ax.sx * sideDist,
+      y,
+      spec.z + ax.oz * outDist + ax.sz * sideDist,
+    );
+    mesh.material = material;
+    mesh.receiveShadows = true;
+    if (options.shadow) this.scene._shadowGenerator?.addShadowCaster(mesh);
+    if (options.physics) {
+      new PhysicsAggregate(mesh, PhysicsShapeType.BOX, { mass: 0, friction: 0.85 }, this.scene);
+    }
+    return mesh;
+  }
+
   _solidBox(name, sx, sy, sz, px, py, pz, mat) {
     const mesh = MeshBuilder.CreateBox(name, { width: sx, height: sy, depth: sz }, this.scene);
     mesh.position.set(px, py, pz);
@@ -471,6 +623,7 @@ export class Town {
     tower.material = this._mat(`${name}Tower`, 0.9, 0.9, 0.86, 0.04, this.textures.plaster);
     tower.receiveShadows = true;
     this.scene._shadowGenerator?.addShadowCaster(tower);
+    new PhysicsAggregate(tower, PhysicsShapeType.BOX, { mass: 0, friction: 0.8 }, this.scene);
 
     const spire = MeshBuilder.CreateCylinder(`${name}Spire`, {
       height: 2.4,
@@ -482,6 +635,7 @@ export class Town {
     spire.position.set(x, h + 4.2 + 1.2, z);
     spire.material = this._mat(`${name}Spire`, 0.32, 0.34, 0.38, 0.06, this.textures.roof);
     this.scene._shadowGenerator?.addShadowCaster(spire);
+    new PhysicsAggregate(spire, PhysicsShapeType.BOX, { mass: 0, friction: 0.8 }, this.scene);
   }
 
   _lamp(index, x, z) {
