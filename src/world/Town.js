@@ -33,6 +33,12 @@ const CHAPEL_OPEN_ANGLE = 1.9;
 const CHAPEL_SWING_SPEED = 1.7;
 const CHAPEL_DOOR_REACH = 2.4;
 
+// House 48 doorway. Wider than the 0.56 m capsule, and left open:
+// F and Xbox X stay the chapel door and do not operate this entrance.
+const HOUSE48_WALL = 0.34;
+const HOUSE48_OPEN_W = 1.28;
+const HOUSE48_OPEN_H = 2.1;
+
 export class Town {
   constructor(scene) {
     this.scene = scene;
@@ -126,7 +132,7 @@ export class Town {
   }
 
   _building(spec, houseNumber) {
-    const { name, x, z, w, d, h, wall, roof, door, awning, steeple } = spec;
+    const { name, x, z, w, d, h, wall, roof, door, awning, steeple, furnished } = spec;
     const wallMat = this._mat(`${name}Wall`, wall[0], wall[1], wall[2], 0.04, this.textures.plaster);
     const roofMat = this._mat(`${name}Roof`, roof[0], roof[1], roof[2], 0.05, this.textures.roof);
 
@@ -134,6 +140,9 @@ export class Town {
       // Interior lamp shares these walls with the sun and the street lamps.
       wallMat.maxSimultaneousLights = 8;
       this._chapelShell(name, x, z, w, d, h, wallMat, door);
+    } else if (furnished) {
+      wallMat.maxSimultaneousLights = 8;
+      this._house48Shell(name, x, z, w, d, h, wallMat, door);
     } else {
       const foundH = 0.46;
       const foundation = MeshBuilder.CreateBox(`${name}Found`, {
@@ -188,6 +197,7 @@ export class Town {
     if (!steeple) this._chimney(name, x, z, w, d, h);
 
     if (steeple) this._chapelDoor(name, x, z, w, d, door);
+    else if (furnished) this._house48DoorFace(name, x, z, w, d, door);
     else this._doorAndWindows(name, x, z, w, d, door);
     if (awning) this._awning(name, x, z, w, d, door);
     if (steeple) {
@@ -195,6 +205,7 @@ export class Town {
       this._chapelNave(name, x, z, w, d, door);
     }
     this._housePlaque(spec, houseNumber);
+    if (furnished) this._house48Furniture(name, x, z, w, d, door);
   }
 
   /**
@@ -647,6 +658,285 @@ export class Town {
     this.scene._shadowGenerator?.addShadowCaster(mesh);
     new PhysicsAggregate(mesh, PhysicsShapeType.BOX, { mass: 0, friction: 0.8 }, this.scene);
     return mesh;
+  }
+
+  /**
+   * Hollow house 48. Wall slabs leave an open doorway on the street face.
+   * The boy walks in; nothing here listens for F or Xbox X.
+   */
+  _house48Shell(name, x, z, w, d, h, wallMat, door) {
+    const T = HOUSE48_WALL;
+    const sides = [
+      { side: "north", px: x, pz: z + d / 2 - T / 2, sx: w, sz: T, alongX: true },
+      { side: "south", px: x, pz: z - d / 2 + T / 2, sx: w, sz: T, alongX: true },
+      { side: "east", px: x + w / 2 - T / 2, pz: z, sx: T, sz: d, alongX: false },
+      { side: "west", px: x - w / 2 + T / 2, pz: z, sx: T, sz: d, alongX: false },
+    ];
+    for (const wall of sides) {
+      if (wall.side === door) this._house48DoorWall(name, wall, h, wallMat);
+      else this._solidBox(`${name}Wall${wall.side}`, wall.sx, h, wall.sz, wall.px, h / 2, wall.pz, wallMat, 1.7);
+    }
+
+    const spec = { x, z, door };
+    const ax = this._doorAxes(door);
+    const inset = T + 0.04;
+    const extentOut = ax.ox !== 0 ? w : d;
+    const extentSide = ax.ox !== 0 ? d : w;
+    const floorMat = this._mat(`${name}Floor`, 1, 1, 1, 0.05, this.textures.wood);
+    floorMat.maxSimultaneousLights = 8;
+    const floor = this._chapelBox(
+      `${name}Floor`, spec,
+      extentOut - 2 * inset, extentSide - 2 * inset, 0.04,
+      0, 0, 0.03, floorMat,
+      { physics: false, shadow: false, tile: 1.2 },
+    );
+    floor.material.maxSimultaneousLights = 8;
+
+    // A sill only as wide as the opening, so the wood floor reads through the doorway
+    // and does not poke out through the jambs.
+    this._chapelBox(
+      `${name}Threshold`, spec,
+      T + 0.18, HOUSE48_OPEN_W - 0.08, 0.02,
+      extentOut / 2 - T / 2 + 0.02, 0, 0.052, floorMat,
+      { physics: false, shadow: false, tile: 0.8 },
+    );
+
+    const ceilingMat = this._mat(`${name}Ceiling`, 0.86, 0.8, 0.7, 0.04, this.textures.wood);
+    ceilingMat.maxSimultaneousLights = 8;
+    const ceiling = this._solidBox(
+      `${name}Ceiling`,
+      ax.ox !== 0 ? extentOut - 2 * inset : extentSide - 2 * inset,
+      0.1,
+      ax.oz !== 0 ? extentOut - 2 * inset : extentSide - 2 * inset,
+      x,
+      h - 0.22,
+      z,
+      ceilingMat,
+      1.4,
+    );
+    ceiling.material.maxSimultaneousLights = 8;
+
+    this._house48Skirt(name, x, z, w, d, door);
+  }
+
+  _house48DoorWall(name, wall, h, wallMat) {
+    const openW = HOUSE48_OPEN_W;
+    const openH = HOUSE48_OPEN_H;
+    const span = wall.alongX ? wall.sx : wall.sz;
+    const jamb = (span - openW) / 2;
+    const lintelH = h - openH;
+    if (wall.alongX) {
+      this._solidBox(`${name}JambL`, jamb, h, wall.sz, wall.px - openW / 2 - jamb / 2, h / 2, wall.pz, wallMat, 1.7);
+      this._solidBox(`${name}JambR`, jamb, h, wall.sz, wall.px + openW / 2 + jamb / 2, h / 2, wall.pz, wallMat, 1.7);
+      this._solidBox(`${name}Lintel`, openW, lintelH, wall.sz, wall.px, openH + lintelH / 2, wall.pz, wallMat, 1.7);
+    } else {
+      this._solidBox(`${name}JambL`, wall.sx, h, jamb, wall.px, h / 2, wall.pz - openW / 2 - jamb / 2, wallMat, 1.7);
+      this._solidBox(`${name}JambR`, wall.sx, h, jamb, wall.px, h / 2, wall.pz + openW / 2 + jamb / 2, wallMat, 1.7);
+      this._solidBox(`${name}Lintel`, wall.sx, lintelH, openW, wall.px, openH + lintelH / 2, wall.pz, wallMat, 1.7);
+    }
+  }
+
+  _house48Skirt(name, x, z, w, d, door) {
+    const skirtT = 0.16;
+    const skirtH = 0.32;
+    const proud = skirtT / 2;
+    const gap = HOUSE48_OPEN_W / 2 + 0.36;
+    const place = (suffix, sx, sz, px, pz) => {
+      const mesh = MeshBuilder.CreateBox(`${name}Skirt${suffix}`, {
+        width: sx,
+        height: skirtH,
+        depth: sz,
+        faceUV: boxFaceUV(sx, skirtH, sz, 1.2),
+      }, this.scene);
+      mesh.position.set(px, skirtH / 2, pz);
+      mesh.material = this._stoneMat;
+      mesh.receiveShadows = true;
+      mesh.isPickable = false;
+    };
+    const sides = [
+      { side: "north", sx: w + skirtT * 2, sz: skirtT, px: x, pz: z + d / 2 + proud },
+      { side: "south", sx: w + skirtT * 2, sz: skirtT, px: x, pz: z - d / 2 - proud },
+      { side: "east", sx: skirtT, sz: d - skirtT * 2, px: x + w / 2 + proud, pz: z },
+      { side: "west", sx: skirtT, sz: d - skirtT * 2, px: x - w / 2 - proud, pz: z },
+    ];
+    for (const side of sides) {
+      if (side.side !== door) {
+        place(side.side, side.sx, side.sz, side.px, side.pz);
+        continue;
+      }
+      if (side.sx > side.sz) {
+        const piece = side.sx / 2 - gap;
+        place("doorL", piece, side.sz, side.px - gap - piece / 2, side.pz);
+        place("doorR", piece, side.sz, side.px + gap + piece / 2, side.pz);
+      } else {
+        const piece = side.sz / 2 - gap;
+        place("doorL", side.sx, piece, side.px, side.pz - gap - piece / 2);
+        place("doorR", side.sx, piece, side.px, side.pz + gap + piece / 2);
+      }
+    }
+  }
+
+  /** Trim and windows on the street face. The opening itself stays empty. */
+  _house48DoorFace(name, x, z, w, d, door) {
+    const face = this._faceOffset(door, w, d, 0.045);
+    const along = face.alongX;
+    const thin = 0.07;
+    const jambW = 0.12;
+    const box = (suffix, alongWall, normal, height, lateral, y, mat) => {
+      const side = this._lateral(door, lateral);
+      const mesh = MeshBuilder.CreateBox(`${name}${suffix}`, {
+        width: along ? normal : alongWall,
+        height,
+        depth: along ? alongWall : normal,
+      }, this.scene);
+      mesh.position.set(x + face.x + side.x, y, z + face.z + side.z);
+      mesh.material = mat;
+      mesh.isPickable = false;
+      mesh.receiveShadows = true;
+      return mesh;
+    };
+    const edge = HOUSE48_OPEN_W / 2 + jambW / 2;
+    box("TrimL", jambW, thin, HOUSE48_OPEN_H, -edge, HOUSE48_OPEN_H / 2, this._trimMat);
+    box("TrimR", jambW, thin, HOUSE48_OPEN_H, edge, HOUSE48_OPEN_H / 2, this._trimMat);
+    box("TrimHead", HOUSE48_OPEN_W + jambW * 2, thin, 0.14, 0, HOUSE48_OPEN_H + 0.07, this._trimMat);
+
+    for (const side of [-1, 1]) {
+      box(`WinFrame${side}`, 0.96, 0.06, 0.96, side * 2.35, 2.62, this._trimMat);
+      box(`Win${side}`, 0.7, 0.04, 0.7, side * 2.35, 2.62, this._windowMat);
+    }
+  }
+
+  /**
+   * Table, couch, bed, rug, and chairs. The rug is a flat decal.
+   * The table, couch, bed, and chairs are solid so he cannot walk through them.
+   */
+  _house48Furniture(name, x, z, w, d, door) {
+    const T = HOUSE48_WALL;
+    const spec = { x, z, door };
+    const ax = this._doorAxes(door);
+    const innerOut = (ax.ox !== 0 ? w : d) / 2 - T;
+    const innerSide = (ax.ox !== 0 ? d : w) / 2 - T;
+    const lit = [];
+    const wood = this._mat(`${name}FurnWood`, 1, 1, 1, 0.06, this.textures.wood);
+    const linen = this._mat(`${name}Linen`, 0.9, 0.88, 0.82, 0.04);
+    const rugMat = this._mat(`${name}Rug`, 0.48, 0.13, 0.16, 0.02);
+    const rugInner = this._mat(`${name}RugInner`, 0.74, 0.58, 0.34, 0.02);
+    const couchMat = this._mat(`${name}Couch`, 0.25, 0.38, 0.55, 0.04);
+    const cushionMat = this._mat(`${name}Cushion`, 0.38, 0.52, 0.68, 0.04);
+    const seatMat = this._mat(`${name}Seat`, 0.4, 0.5, 0.3, 0.04);
+    const blanketMat = this._mat(`${name}Blanket`, 0.55, 0.22, 0.26, 0.03);
+    const pillowMat = this._mat(`${name}Pillow`, 0.94, 0.92, 0.88, 0.04);
+    for (const mat of [wood, linen, rugMat, rugInner, couchMat, cushionMat, seatMat, blanketMat, pillowMat]) {
+      mat.maxSimultaneousLights = 8;
+    }
+
+    const put = (suffix, outLen, sideLen, height, outDist, sideDist, y, material, physics, shadow = physics) => {
+      const mesh = this._chapelBox(
+        `${name}${suffix}`, spec, outLen, sideLen, height, outDist, sideDist, y, material,
+        { physics, shadow, tile: 1.2 },
+      );
+      lit.push(mesh);
+      return mesh;
+    };
+
+    const floorY = 0.075;
+    put("Rug", 7.77, 7.27, 0.02, -0.735, -0.085, 0.055, rugMat, false, false);
+    put("RugInner", 7.07, 6.57, 0.015, -0.735, -0.085, 0.068, rugInner, false, false);
+
+    const tableOut = 0.85;
+    const tableSide = 1.2;
+    const tableOutLen = 0.9;
+    const tableSideLen = 1.5;
+    const legH = 0.62;
+    put("TableTop", tableOutLen, tableSideLen, 0.08, tableOut, tableSide, floorY + legH + 0.04, wood, true);
+    for (const [oi, si] of [[-1, -1], [-1, 1], [1, -1], [1, 1]]) {
+      put(
+        `TableLeg${oi}${si}`, 0.08, 0.08, legH,
+        tableOut + oi * (tableOutLen / 2 - 0.14),
+        tableSide + si * (tableSideLen / 2 - 0.14),
+        floorY + legH / 2,
+        wood, true, false,
+      );
+    }
+
+    const chair = (suffix, outDist, sideDist, backOut, backSide) => {
+      put(`ChairSeat${suffix}`, 0.46, 0.46, 0.08, outDist, sideDist, floorY + 0.34 + 0.04, seatMat, true);
+      const backLenOut = backOut !== 0 ? 0.08 : 0.46;
+      const backLenSide = backSide !== 0 ? 0.08 : 0.46;
+      put(
+        `ChairBack${suffix}`, backLenOut, backLenSide, 0.48,
+        outDist + backOut, sideDist + backSide, floorY + 0.34 + 0.08 + 0.22,
+        wood, true,
+      );
+      for (const [oi, si] of [[-1, -1], [-1, 1], [1, -1], [1, 1]]) {
+        put(
+          `ChairLeg${suffix}${oi}${si}`, 0.06, 0.06, 0.34,
+          outDist + oi * 0.16, sideDist + si * 0.16, floorY + 0.17, wood, false, false,
+        );
+      }
+    };
+    const seat = 0.46;
+    const gap = 0.16;
+    chair("S", tableOut + tableOutLen / 2 + gap + seat / 2, tableSide, 0.19, 0);
+    chair("N", tableOut - tableOutLen / 2 - gap - seat / 2, tableSide, -0.19, 0);
+    chair("E", tableOut, tableSide + tableSideLen / 2 + gap + seat / 2, 0, 0.19);
+    chair("W", tableOut, -1.55, 0, -0.19);
+
+    const couchDep = 0.84;
+    const couchLen = 2.15;
+    const couchSide = -(innerSide - 0.18 - couchDep / 2);
+    const couchOut = -0.45;
+    const couchH = 0.36;
+    put("CouchBase", couchLen, couchDep, couchH, couchOut, couchSide, floorY + couchH / 2, couchMat, true);
+    put(
+      "CouchBack", couchLen, 0.14, 0.5,
+      couchOut, couchSide - couchDep / 2 + 0.07, floorY + couchH + 0.12, couchMat, true,
+    );
+    put(
+      "CouchCushion", couchLen - 0.28, couchDep - 0.22, 0.1,
+      couchOut, couchSide + 0.06, floorY + couchH + 0.05, cushionMat, false, false,
+    );
+    for (const end of [-1, 1]) {
+      put(
+        `CouchArm${end}`, 0.12, couchDep - 0.16, 0.22,
+        couchOut + end * (couchLen / 2 - 0.08), couchSide + 0.04, floorY + couchH + 0.08, couchMat, true,
+      );
+    }
+
+    const bedOutLen = 2.05;
+    const bedSideLen = 1.28;
+    const bedOut = -(innerOut - 0.22 - bedOutLen / 2);
+    const bedSide = 1.35;
+    const frameH = 0.24;
+    put("BedFrame", bedOutLen, bedSideLen, frameH, bedOut, bedSide, floorY + frameH / 2, wood, true);
+    const mattressH = 0.16;
+    put(
+      "BedMattress", bedOutLen - 0.14, bedSideLen - 0.16, mattressH,
+      bedOut + 0.04, bedSide, floorY + frameH + mattressH / 2, linen, true,
+    );
+    const headOut = bedOut - bedOutLen / 2 + 0.05;
+    put("BedHead", 0.1, bedSideLen, 0.62, headOut, bedSide, floorY + 0.31, wood, true);
+    put(
+      "BedPillow", 0.34, 0.72, 0.1,
+      headOut + 0.05 + 0.02 + 0.17, bedSide, floorY + frameH + mattressH + 0.05, pillowMat, false, false,
+    );
+    put(
+      "BedBlanket", 1.15, bedSideLen - 0.16, 0.06,
+      bedOut + 0.32, bedSide, floorY + frameH + mattressH + 0.03, blanketMat, false, false,
+    );
+
+    const light = new PointLight(
+      `${name}Lamp`,
+      this._chapelPoint(x, z, door, 0.2, 0, 2.15),
+      this.scene,
+    );
+    light.diffuse = new Color3(1, 0.86, 0.62);
+    light.intensity = 1.25;
+    light.range = 9;
+    for (const mesh of this.scene.meshes) {
+      if (mesh.name.startsWith(name) && !lit.includes(mesh)) lit.push(mesh);
+    }
+    light.includedOnlyMeshes = lit;
   }
 
   _doorAndWindows(name, x, z, w, d, door) {

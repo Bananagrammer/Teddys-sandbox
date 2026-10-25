@@ -214,6 +214,28 @@ function decorate(buildings) {
   });
 }
 
+// Plaque 48 is the last lot (mesh name house47), centered near (144.4, 131).
+// A modest footprint bump, same center and door, so the room can hold furniture
+// without shifting the chapel, the well, the lamps, or any other lot.
+function enlargeHouse48(buildings) {
+  const house = buildings[buildings.length - 1];
+  if (
+    buildings.length !== 48
+    || !house
+    || house.name !== "house47"
+    || house.steeple
+    || house.awning
+    || house.x !== 144.4
+    || house.z !== 131
+  ) {
+    throw new Error("plaque 48 is not the northeast house at (144.4, 131)");
+  }
+  house.w = 8.4;
+  house.d = 10.2;
+  house.h = 6.2;
+  house.furnished = true;
+}
+
 function layoutBuildings() {
   const buildings = [];
   buildingLots().forEach((lot, n) => {
@@ -221,6 +243,7 @@ function layoutBuildings() {
     if (building) buildings.push(building);
   });
   decorate(buildings);
+  enlargeHouse48(buildings);
   return buildings;
 }
 
