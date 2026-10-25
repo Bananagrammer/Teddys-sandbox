@@ -20,6 +20,16 @@ export const LAMPS = [
   [-11, -11],
 ];
 
+// One tree house, not a numbered lot. The street centers stop at ±100 and the
+// roads themselves end near ±158, so the northeast meadow past both the x=100
+// and z=100 roads is outside every block. House 48 sits near (144, 131); the
+// nearest trees are the perimeter pair around (152, 144) and (144, 152).
+// The three shops stay beside the plaza. Plaques stay 1–48.
+export const TREE_HOUSE = { x: 160, z: 161 };
+
+// Meshes in Town._treeHouse stay inside this box (deck, stair, cabin, leaves).
+const TREE_HOUSE_BOX = { x0: 156.4, x1: 164.8, z0: 148.6, z1: 165.2 };
+
 const WALLS = [
   [0.93, 0.86, 0.68],
   [0.7, 0.8, 0.84],
@@ -256,6 +266,18 @@ function layoutTrees(buildings) {
   return trees;
 }
 
+function gapToAabb(x, z, box) {
+  const dx = x < box.x0 ? box.x0 - x : x > box.x1 ? x - box.x1 : 0;
+  const dz = z < box.z0 ? box.z0 - z : z > box.z1 ? z - box.z1 : 0;
+  return Math.hypot(dx, dz);
+}
+
+function aabbGap(a, b) {
+  const dx = Math.max(a.x0 - b.x1, b.x0 - a.x1, 0);
+  const dz = Math.max(a.z0 - b.z1, b.z0 - a.z1, 0);
+  return Math.hypot(dx, dz);
+}
+
 function separatedGap(dx, dz) {
   if (dx >= 0 && dz >= 0) return Math.hypot(dx, dz);
   if (dx >= 0) return dx;
@@ -319,6 +341,29 @@ export function validateLayout(buildings = BUILDINGS, trees = TREES) {
       if (Math.abs(x - b.x) < b.w / 2 + 0.8 && Math.abs(z - b.z) < b.d / 2 + 0.8) {
         problems.push(`tree ${x},${z} is inside ${b.name}`);
       }
+    }
+    const treeGap = gapToAabb(x, z, TREE_HOUSE_BOX);
+    if (treeGap < 4) problems.push(`tree ${x},${z} is ${treeGap.toFixed(2)}m from the tree house`);
+  }
+
+  if (Math.abs(TREE_HOUSE.x) > GROUND_HALF - 8 || Math.abs(TREE_HOUSE.z) > GROUND_HALF - 8) {
+    problems.push("tree house is too close to the edge of the ground");
+  }
+  for (const b of buildings) {
+    const houseBox = {
+      x0: b.x - b.w / 2,
+      x1: b.x + b.w / 2,
+      z0: b.z - b.d / 2,
+      z1: b.z + b.d / 2,
+    };
+    const gap = aabbGap(houseBox, TREE_HOUSE_BOX);
+    if (gap < 6) problems.push(`${b.name} is ${gap.toFixed(2)}m from the tree house`);
+  }
+  for (const s of STREET_CENTERS) {
+    const ns = { x0: s - STREET_HALF, x1: s + STREET_HALF, z0: -ROAD_LIMIT, z1: ROAD_LIMIT };
+    const ew = { x0: -ROAD_LIMIT, x1: ROAD_LIMIT, z0: s - STREET_HALF, z1: s + STREET_HALF };
+    if (aabbGap(ns, TREE_HOUSE_BOX) < 1 || aabbGap(ew, TREE_HOUSE_BOX) < 1) {
+      problems.push("tree house footprint meets a street");
     }
   }
 
@@ -400,5 +445,6 @@ export function layoutSummary() {
     spawn: SPAWN,
     lamps: LAMPS,
     chapel: BUILDINGS.find((b) => b.steeple) || null,
+    treeHouse: TREE_HOUSE,
   };
 }

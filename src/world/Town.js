@@ -13,6 +13,7 @@ import {
   TREES,
   LAMPS,
   WELL,
+  TREE_HOUSE,
   GROUND_SIZE,
   PLAZA_HALF,
   roadDecals,
@@ -74,6 +75,7 @@ export class Town {
     BUILDINGS.forEach((spec, index) => this._building(spec, index + 1));
     this._well(WELL.x, WELL.z);
     TREES.forEach(([x, z], i) => this._tree(i, x, z));
+    this._treeHouse(TREE_HOUSE);
     this.lamps = LAMPS.map(([x, z], i) => this._lamp(i, x, z));
   }
 
@@ -634,8 +636,10 @@ export class Town {
     return mesh;
   }
 
-  _solidBox(name, sx, sy, sz, px, py, pz, mat) {
-    const mesh = MeshBuilder.CreateBox(name, { width: sx, height: sy, depth: sz }, this.scene);
+  _solidBox(name, sx, sy, sz, px, py, pz, mat, tile) {
+    const options = { width: sx, height: sy, depth: sz };
+    if (tile) options.faceUV = boxFaceUV(sx, sy, sz, tile);
+    const mesh = MeshBuilder.CreateBox(name, options, this.scene);
     mesh.position.set(px, py, pz);
     mesh.material = mat;
     mesh.receiveShadows = true;
@@ -798,6 +802,246 @@ export class Town {
     }, this.scene);
     water.position.set(x, 0.78, z);
     water.material = this._waterMat;
+  }
+
+  /**
+   * Cabin in the northeast meadow. The trunk collider stops him on the ground
+   * and again where it comes up through the floor. The stair is a straight
+   * run of boxes the existing hop can clear. No plaque — not a numbered house.
+   */
+  _treeHouse(spec) {
+    const { x, z } = spec;
+    const name = "treeHouse";
+    const deckTop = 3.2;
+    const deckH = 0.22;
+    const deck = { x0: 157.35, x1: 162.45, z0: 157.35, z1: 162.75 };
+    const deckCx = (deck.x0 + deck.x1) / 2;
+    const deckCz = (deck.z0 + deck.z1) / 2;
+
+    const timber = this._mat(`${name}Timber`, 0.76, 0.55, 0.34, 0.06, this.textures.wood);
+    const deckMat = this._mat(`${name}Deck`, 0.62, 0.44, 0.26, 0.05, this.textures.wood);
+    const roofMat = this._mat(`${name}Roof`, 0.62, 0.24, 0.16, 0.05, this.textures.roof);
+
+    const baseH = deckTop - deckH + 0.06;
+    const base = MeshBuilder.CreateCylinder(`${name}Trunk`, {
+      height: baseH,
+      diameter: 1.55,
+      tessellation: 8,
+    }, this.scene);
+    base.position.set(x, baseH / 2, z);
+    base.material = this._trunkMat;
+    this._repeatUvs(base, 2, 3);
+    base.receiveShadows = true;
+    this.scene._shadowGenerator?.addShadowCaster(base);
+    new PhysicsAggregate(base, PhysicsShapeType.CYLINDER, { mass: 0, friction: 0.85 }, this.scene);
+
+    const flareH = 0.4;
+    const flare = MeshBuilder.CreateCylinder(`${name}Flare`, {
+      height: flareH,
+      diameterTop: 1.45,
+      diameterBottom: 1.9,
+      tessellation: 8,
+    }, this.scene);
+    flare.position.set(x, flareH / 2, z);
+    flare.material = this._trunkMat;
+    this._repeatUvs(flare, 2, 1);
+    flare.receiveShadows = true;
+    flare.isPickable = false;
+    this.scene._shadowGenerator?.addShadowCaster(flare);
+
+    this._solidBox(
+      `${name}Deck`,
+      deck.x1 - deck.x0,
+      deckH,
+      deck.z1 - deck.z0,
+      deckCx,
+      deckTop - deckH / 2,
+      deckCz,
+      deckMat,
+      1.15,
+    );
+
+    const upperBottom = deckTop - 0.1;
+    const upperTop = 5.5;
+    const upperH = upperTop - upperBottom;
+    const upper = MeshBuilder.CreateCylinder(`${name}TrunkUpper`, {
+      height: upperH,
+      diameterBottom: 0.82,
+      diameterTop: 0.48,
+      tessellation: 8,
+    }, this.scene);
+    upper.position.set(x, upperBottom + upperH / 2, z);
+    upper.material = this._trunkMat;
+    this._repeatUvs(upper, 1, 3);
+    upper.receiveShadows = true;
+    this.scene._shadowGenerator?.addShadowCaster(upper);
+    new PhysicsAggregate(upper, PhysicsShapeType.CYLINDER, { mass: 0, friction: 0.8 }, this.scene);
+
+    const wallT = 0.16;
+    const wallH = 2.15;
+    const wallY = deckTop + wallH / 2;
+    const cab = { x0: 158.05, x1: 161.75, z0: 159.25, z1: 162.5 };
+    const cabW = cab.x1 - cab.x0;
+    const cabD = cab.z1 - cab.z0;
+    const cabCx = (cab.x0 + cab.x1) / 2;
+    const cabCz = (cab.z0 + cab.z1) / 2;
+    const doorX = 159.15;
+    const doorW = 1.2;
+    const doorZ = cab.z0 + wallT / 2;
+    const leftW = doorX - doorW / 2 - cab.x0;
+    const rightW = cab.x1 - (doorX + doorW / 2);
+    const lintelH = 0.16;
+
+    this._solidBox(`${name}WallW`, wallT, wallH, cabD, cab.x0 + wallT / 2, wallY, cabCz, timber, 1.2);
+    this._solidBox(`${name}WallE`, wallT, wallH, cabD, cab.x1 - wallT / 2, wallY, cabCz, timber, 1.2);
+    this._solidBox(`${name}WallN`, cabW, wallH, wallT, cabCx, wallY, cab.z1 - wallT / 2, timber, 1.2);
+    this._solidBox(
+      `${name}JambL`,
+      leftW,
+      wallH,
+      wallT,
+      cab.x0 + leftW / 2,
+      wallY,
+      doorZ,
+      timber,
+      1.2,
+    );
+    this._solidBox(
+      `${name}JambR`,
+      rightW,
+      wallH,
+      wallT,
+      cab.x1 - rightW / 2,
+      wallY,
+      doorZ,
+      timber,
+      1.2,
+    );
+    this._solidBox(
+      `${name}Lintel`,
+      doorW,
+      lintelH,
+      wallT,
+      doorX,
+      deckTop + wallH - lintelH / 2,
+      doorZ,
+      timber,
+      0.8,
+    );
+
+    const winY = deckTop + 1.28;
+    this._treeHouseWindow(name, "W", cab.x0 - 0.02, winY, cabCz, true);
+    this._treeHouseWindow(name, "S", (doorX + doorW / 2 + cab.x1) / 2, winY, cab.z0 - 0.02, false);
+
+    const eaveY = deckTop + wallH + 0.02;
+    this._solidBox(`${name}Eave`, cabW + 0.5, 0.14, cabD + 0.46, cabCx, eaveY, cabCz, roofMat, 1.2);
+    const roof = MeshBuilder.CreateCylinder(`${name}Roof`, {
+      height: 1.35,
+      diameterTop: 0,
+      diameterBottom: Math.max(cabW, cabD) * 1.22,
+      tessellation: 4,
+    }, this.scene);
+    roof.rotation.y = Math.PI / 4;
+    roof.position.set(cabCx, eaveY + 0.62, cabCz);
+    roof.material = roofMat;
+    this._repeatUvs(roof, 3, 2);
+    roof.receiveShadows = true;
+    this.scene._shadowGenerator?.addShadowCaster(roof);
+
+    const stepCount = 8;
+    const riser = deckTop / stepCount;
+    const stepW = 1.7;
+    const stepD = 1.32;
+    const spacing = 1.02;
+    const topNorth = deck.z0 - 0.05;
+    const topCenterZ = topNorth - stepD / 2;
+    for (let i = 0; i < stepCount; i += 1) {
+      const fromTop = stepCount - 1 - i;
+      const top = (i + 1) * riser;
+      this._solidBox(
+        `${name}Step${i}`,
+        stepW,
+        top,
+        stepD,
+        doorX,
+        top / 2,
+        topCenterZ - fromTop * spacing,
+        timber,
+        1.1,
+      );
+    }
+
+    this._limb(name, 0, x, 3.35, z, 163.4, 5.15, 162.1, 0.34);
+    this._limb(name, 1, x, 3.45, z, 161.4, 5.7, 164.0, 0.32);
+    this._limb(name, 2, x, 3.3, z, 157.7, 4.7, 163.2, 0.3);
+    this._limb(name, 3, x, 3.25, z, 162.6, 6.25, 160.3, 0.28);
+    this._limb(name, 4, x, 2.7, z, 157.9, 2.86, 158.5, 0.42);
+    this._limb(name, 5, x, 2.65, z, 162.6, 2.86, 158.9, 0.38);
+
+    const foliage = [
+      [163.2, 5.15, 162.2, 2.2, this._leafMat],
+      [161.3, 5.85, 163.6, 2.15, this._leafMatDark],
+      [157.9, 4.85, 163.1, 1.85, this._leafMat],
+      [162.5, 6.35, 160.4, 1.9, this._leafMatDark],
+      [159.6, 6.55, 161.3, 2.05, this._leafMat],
+      [157.55, 4.55, 160.3, 1.7, this._leafMat],
+    ];
+    for (const [lx, ly, lz, diameter, mat] of foliage) {
+      const leaf = MeshBuilder.CreateSphere(`${name}Leaf${lx.toFixed(0)}${lz.toFixed(0)}`, {
+        diameter,
+        segments: 7,
+      }, this.scene);
+      leaf.position.set(lx, ly, lz);
+      leaf.material = mat;
+      leaf.receiveShadows = true;
+      leaf.isPickable = false;
+      this.scene._shadowGenerator?.addShadowCaster(leaf);
+    }
+  }
+
+  _treeHouseWindow(name, suffix, x, y, z, alongX) {
+    const trim = MeshBuilder.CreateBox(`${name}WinFrame${suffix}`, {
+      width: alongX ? 0.05 : 0.78,
+      height: 0.78,
+      depth: alongX ? 0.78 : 0.05,
+    }, this.scene);
+    trim.position.set(x, y, z);
+    trim.material = this._trimMat;
+    trim.isPickable = false;
+
+    const win = MeshBuilder.CreateBox(`${name}Win${suffix}`, {
+      width: alongX ? 0.04 : 0.56,
+      height: 0.56,
+      depth: alongX ? 0.56 : 0.04,
+    }, this.scene);
+    win.position.set(x, y, z);
+    win.material = this._windowMat;
+    win.isPickable = false;
+  }
+
+  _limb(name, index, x0, y0, z0, x1, y1, z1, diameter) {
+    const dx = x1 - x0;
+    const dy = y1 - y0;
+    const dz = z1 - z0;
+    const length = Math.hypot(dx, dy, dz);
+    const mesh = MeshBuilder.CreateCylinder(`${name}Limb${index}`, {
+      height: length,
+      diameterBottom: diameter,
+      diameterTop: diameter * 0.62,
+      tessellation: 6,
+    }, this.scene);
+    mesh.position.set((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2);
+    mesh.rotationQuaternion = new Quaternion();
+    Quaternion.FromUnitVectorsToRef(
+      Vector3.Up(),
+      new Vector3(dx / length, dy / length, dz / length),
+      mesh.rotationQuaternion,
+    );
+    mesh.material = this._trunkMat;
+    mesh.receiveShadows = true;
+    mesh.isPickable = false;
+    this.scene._shadowGenerator?.addShadowCaster(mesh);
+    return mesh;
   }
 
   _tree(index, x, z) {
