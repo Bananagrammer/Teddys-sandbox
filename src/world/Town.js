@@ -1,5 +1,6 @@
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
+import { Material } from "@babylonjs/core/Materials/material";
 import { Color3 } from "@babylonjs/core/Maths/math.color";
 import { Quaternion, Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { PointLight } from "@babylonjs/core/Lights/pointLight";
@@ -38,6 +39,12 @@ const CHAPEL_DOOR_REACH = 2.4;
 const HOUSE48_WALL = 0.34;
 const HOUSE48_OPEN_W = 1.28;
 const HOUSE48_OPEN_H = 2.1;
+// One window, right of the door on the street wall. The sill stays above a jump
+// (capsule top peaks near 2.4 m), so the doorway is still the way in.
+const HOUSE48_WIN_W = 1.4;
+const HOUSE48_WIN_H = 1.3;
+const HOUSE48_WIN_SILL = 2.85;
+const HOUSE48_WIN_LATERAL = 2.42;
 
 export class Town {
   constructor(scene) {
@@ -727,13 +734,44 @@ export class Town {
     const lintelH = h - openH;
     if (wall.alongX) {
       this._solidBox(`${name}JambL`, jamb, h, wall.sz, wall.px - openW / 2 - jamb / 2, h / 2, wall.pz, wallMat, 1.7);
-      this._solidBox(`${name}JambR`, jamb, h, wall.sz, wall.px + openW / 2 + jamb / 2, h / 2, wall.pz, wallMat, 1.7);
       this._solidBox(`${name}Lintel`, openW, lintelH, wall.sz, wall.px, openH + lintelH / 2, wall.pz, wallMat, 1.7);
     } else {
       this._solidBox(`${name}JambL`, wall.sx, h, jamb, wall.px, h / 2, wall.pz - openW / 2 - jamb / 2, wallMat, 1.7);
-      this._solidBox(`${name}JambR`, wall.sx, h, jamb, wall.px, h / 2, wall.pz + openW / 2 + jamb / 2, wallMat, 1.7);
       this._solidBox(`${name}Lintel`, wall.sx, lintelH, openW, wall.px, openH + lintelH / 2, wall.pz, wallMat, 1.7);
     }
+    this._house48WindowJamb(name, wall, h, wallMat, jamb);
+  }
+
+  /**
+   * The right-hand jamb, split around one opening. The hole starts above a jump,
+   * so the boy cannot walk out through it.
+   */
+  _house48WindowJamb(name, wall, h, wallMat, jamb) {
+    const doorEdge = HOUSE48_OPEN_W / 2;
+    const wallEdge = HOUSE48_OPEN_W / 2 + jamb;
+    const winNear = HOUSE48_WIN_LATERAL - HOUSE48_WIN_W / 2;
+    const winFar = HOUSE48_WIN_LATERAL + HOUSE48_WIN_W / 2;
+    const sill = HOUSE48_WIN_SILL;
+    const head = HOUSE48_WIN_SILL + HOUSE48_WIN_H;
+    const fits = doorEdge < winNear && winFar < wallEdge && sill > HOUSE48_OPEN_H && head < h - 0.2;
+    const place = (suffix, from, to, y, height) => {
+      const len = Math.abs(to - from);
+      if (len < 0.02 || height < 0.02) return;
+      const center = (from + to) / 2;
+      if (wall.alongX) {
+        this._solidBox(`${name}${suffix}`, len, height, wall.sz, wall.px + center, y, wall.pz, wallMat, 1.7);
+      } else {
+        this._solidBox(`${name}${suffix}`, wall.sx, height, len, wall.px, y, wall.pz + center, wallMat, 1.7);
+      }
+    };
+    if (!fits) {
+      place("JambR", doorEdge, wallEdge, h / 2, h);
+      return;
+    }
+    place("JambRIn", doorEdge, winNear, h / 2, h);
+    place("JambROut", winFar, wallEdge, h / 2, h);
+    place("WinSill", winNear, winFar, sill / 2, sill);
+    place("WinHead", winNear, winFar, (head + h) / 2, h - head);
   }
 
   _house48Skirt(name, x, z, w, d, door) {
@@ -776,7 +814,7 @@ export class Town {
     }
   }
 
-  /** Trim and windows on the street face. The opening itself stays empty. */
+  /** Door trim, plus one glass window in the street wall. The doorway stays open. */
   _house48DoorFace(name, x, z, w, d, door) {
     const face = this._faceOffset(door, w, d, 0.045);
     const along = face.alongX;
@@ -800,10 +838,68 @@ export class Town {
     box("TrimR", jambW, thin, HOUSE48_OPEN_H, edge, HOUSE48_OPEN_H / 2, this._trimMat);
     box("TrimHead", HOUSE48_OPEN_W + jambW * 2, thin, 0.14, 0, HOUSE48_OPEN_H + 0.07, this._trimMat);
 
-    for (const side of [-1, 1]) {
-      box(`WinFrame${side}`, 0.96, 0.06, 0.96, side * 2.35, 2.62, this._trimMat);
-      box(`Win${side}`, 0.7, 0.04, 0.7, side * 2.35, 2.62, this._windowMat);
-    }
+    this._house48Window(name, x, z, w, d, door);
+  }
+
+  /**
+   * Glass in the street-wall opening, with a frame that shows on both faces.
+   * No collider: the sill is above reach, and the doorway is the way in.
+   */
+  _house48Window(name, x, z, w, d, door) {
+    const center = this._faceOffset(door, w, d, -HOUSE48_WALL / 2);
+    const along = center.alongX;
+    const side = this._lateral(door, HOUSE48_WIN_LATERAL);
+    const y = HOUSE48_WIN_SILL + HOUSE48_WIN_H / 2;
+    const px = x + center.x + side.x;
+    const pz = z + center.z + side.z;
+    const paneDepth = HOUSE48_WALL + 0.08;
+    const frame = 0.1;
+    const bar = (suffix, alongWall, normal, height, dx, dy, dz) => {
+      const mesh = MeshBuilder.CreateBox(`${name}${suffix}`, {
+        width: along ? normal : alongWall,
+        height,
+        depth: along ? alongWall : normal,
+      }, this.scene);
+      mesh.position.set(px + dx, y + dy, pz + dz);
+      mesh.material = this._trimMat;
+      mesh.isPickable = false;
+      mesh.receiveShadows = true;
+      return mesh;
+    };
+    const halfW = HOUSE48_WIN_W / 2;
+    const halfH = HOUSE48_WIN_H / 2;
+    const left = this._lateral(door, -halfW);
+    const right = this._lateral(door, halfW);
+    bar("WinFrameL", frame, paneDepth, HOUSE48_WIN_H + frame, left.x, 0, left.z);
+    bar("WinFrameR", frame, paneDepth, HOUSE48_WIN_H + frame, right.x, 0, right.z);
+    bar("WinFrameSill", HOUSE48_WIN_W + frame, paneDepth, frame, 0, -halfH, 0);
+    bar("WinFrameHead", HOUSE48_WIN_W + frame, paneDepth, frame, 0, halfH, 0);
+    bar("WinMuntinV", 0.05, 0.06, HOUSE48_WIN_H - frame, 0, 0, 0);
+    bar("WinMuntinH", HOUSE48_WIN_W - frame, 0.06, 0.05, 0, 0, 0);
+
+    const glass = MeshBuilder.CreateBox(`${name}WinGlass`, {
+      width: along ? 0.03 : HOUSE48_WIN_W - 0.08,
+      height: HOUSE48_WIN_H - 0.08,
+      depth: along ? HOUSE48_WIN_W - 0.08 : 0.03,
+    }, this.scene);
+    glass.position.set(px, y, pz);
+    glass.material = this._house48GlassMat();
+    glass.hasVertexAlpha = true;
+    glass.isPickable = false;
+  }
+
+  _house48GlassMat() {
+    if (this._house48Glass) return this._house48Glass;
+    const mat = new StandardMaterial("house48Glass", this.scene);
+    mat.diffuseColor = new Color3(0.62, 0.8, 0.92);
+    mat.emissiveColor = new Color3(0.2, 0.32, 0.42);
+    mat.specularColor = new Color3(0.9, 0.94, 0.98);
+    mat.alpha = 0.32;
+    mat.backFaceCulling = false;
+    mat.transparencyMode = Material.MATERIAL_ALPHABLEND;
+    mat.maxSimultaneousLights = 8;
+    this._house48Glass = mat;
+    return mat;
   }
 
   /**
