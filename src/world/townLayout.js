@@ -43,6 +43,34 @@ export const TREE_LADDER = {
 // Meshes in Town._treeHouse stay inside this box (deck, ladder, cabin, leaves).
 const TREE_HOUSE_BOX = { x0: 156.4, x1: 164.8, z0: 148.6, z1: 165.2 };
 
+// Southwest meadow, past the roads that end at ±158. House 48 and the tree
+// house are in the northeast, and the shops stay by the plaza.
+export const PLAYGROUND = { x: -164.2, z: -164.4 };
+export const PLAYGROUND_BOX = { x0: -169.4, x1: -159.2, z0: -169.6, z1: -159.4 };
+
+// Hold-A climbs, same shape as the tree-house ladder. Climb columns face
+// the open side of each ladder and do not overlap.
+export const PLAY_LADDERS = [
+  {
+    id: "slide",
+    x: -167.5,
+    z: -165.05,
+    deckTop: 1.45,
+    climb: { x0: -168.05, x1: -166.95, z0: -166.15, z1: -165.25 },
+    standX: -167.5,
+    standZ: -164.0,
+  },
+  {
+    id: "structure",
+    x: -162.8,
+    z: -167.2,
+    deckTop: 2.05,
+    climb: { x0: -163.35, x1: -162.25, z0: -168.15, z1: -167.4 },
+    standX: -162.8,
+    standZ: -165.35,
+  },
+];
+
 const WALLS = [
   [0.93, 0.86, 0.68],
   [0.7, 0.8, 0.84],
