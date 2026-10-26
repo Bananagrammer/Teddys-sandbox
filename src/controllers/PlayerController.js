@@ -3,7 +3,7 @@ import { Ray } from "@babylonjs/core/Culling/ray";
 import { UniversalCamera } from "@babylonjs/core/Cameras/universalCamera";
 import { DefaultRenderingPipeline } from "@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline";
 
-import { TREE_LADDER } from "../world/townLayout.js";
+import { PLAY_LADDERS, TREE_LADDER } from "../world/townLayout.js";
 
 const MOVE_SPEED = 5;
 const MOUSE_SENS = 0.0025;
@@ -43,18 +43,33 @@ export class PlayerController {
     this._pendingPlace = null;
     this._frames = 0;
     this._groundRay = new Ray(new Vector3(), new Vector3(0, -1, 0), GROUND_START + GROUND_PROBE);
-    const standY = TREE_LADDER.deckTop + boy.halfHeight;
-    this.ladder = {
-      x: TREE_LADDER.x,
-      z: TREE_LADDER.z,
-      deckTop: TREE_LADDER.deckTop,
-      climb: TREE_LADDER.climb,
-      standX: TREE_LADDER.standX,
-      standZ: TREE_LADDER.standZ,
+    this.ladders = [TREE_LADDER, ...PLAY_LADDERS].map((spec) => this._ladderSpec(spec, boy.halfHeight));
+    // The debug getter still names the tree-house ladder. Climbing uses this.ladders.
+    this.ladder = this.ladders[0];
+    this._mountLadder = null;
+  }
+
+  _ladderSpec(spec, halfHeight) {
+    const standY = spec.deckTop + halfHeight;
+    return {
+      id: spec.id || "tree",
+      x: spec.x,
+      z: spec.z,
+      deckTop: spec.deckTop,
+      climb: spec.climb,
+      standX: spec.standX,
+      standZ: spec.standZ,
       standY,
-      // Feet clear the rail tops before he slides onto the deck.
       clearY: standY + 0.18,
     };
+  }
+
+  _ladderAt(x, z) {
+    for (const ladder of this.ladders) {
+      const box = ladder.climb;
+      if (x >= box.x0 && x <= box.x1 && z >= box.z0 && z <= box.z1) return ladder;
+    }
+    return null;
   }
 
   /** Dev hook. Applied on the next update so physics teleports with it. */
@@ -124,13 +139,15 @@ export class PlayerController {
     let vy = vertical;
 
     const pos = this.boy.capsuleMesh.position;
-    const atLadder = this._inClimbColumn(pos.x, pos.z);
+    const here = this._ladderAt(pos.x, pos.z);
+    const atLadder = !!here;
     let climbing = false;
 
     if (this._pendingPlace) {
       const spot = this._pendingPlace;
       this._pendingPlace = null;
       this._mounting = false;
+      this._mountLadder = null;
       this._wasClimbing = false;
       pos.set(spot.x, spot.y, spot.z);
       body.disablePreStep = false;
@@ -144,19 +161,20 @@ export class PlayerController {
       vx = this._slideVx;
       vy = this._slideVy;
       vz = this._slideVz;
-    } else if (padA && atLadder && pos.y < this.ladder.clearY - 0.02) {
+    } else if (padA && here && pos.y < here.clearY - 0.02) {
       const nextX = pos.x + vx * dt;
       const nextZ = pos.z + vz * dt;
-      const walkingOff = (vx !== 0 || vz !== 0) && !this._inClimbColumn(nextX, nextZ);
+      const walkingOff = (vx !== 0 || vz !== 0) && !this._ladderAt(nextX, nextZ);
       if (walkingOff) {
         this._stopClimb(body);
         if (this._wasClimbing && vy > 0) vy = 0;
       } else {
         // A climbs here. It must not also add the hop impulse.
         climbing = true;
+        this._mountLadder = here;
         body.setGravityFactor(0);
         vy = CLIMB_SPEED;
-        if (pos.y + CLIMB_SPEED * Math.max(dt, 1 / 60) >= this.ladder.clearY - 0.03) {
+        if (pos.y + CLIMB_SPEED * Math.max(dt, 1 / 60) >= here.clearY - 0.03) {
           this._mounting = true;
         }
       }
@@ -164,6 +182,7 @@ export class PlayerController {
       this._stopClimb(body);
       const endedClimb = this._wasClimbing || this._mounting;
       this._mounting = false;
+      this._mountLadder = null;
       if (this.grounded && (jump.space || (jump.pad && !atLadder))) vy = JUMP_SPEED;
       else if (endedClimb && vy > 0) vy = 0;
     }
@@ -190,8 +209,7 @@ export class PlayerController {
   }
 
   _inClimbColumn(x, z) {
-    const box = this.ladder.climb;
-    return x >= box.x0 && x <= box.x1 && z >= box.z0 && z <= box.z1;
+    return !!this._ladderAt(x, z);
   }
 
   _stopClimb(body) {
@@ -203,7 +221,7 @@ export class PlayerController {
    * Returns true once he has been set down on the deck.
    */
   _slideOntoDeck(body, pos, dt) {
-    const ladder = this.ladder;
+    const ladder = this._mountLadder || this.ladder;
     const dx = ladder.standX - pos.x;
     const dz = ladder.standZ - pos.z;
     const dist = Math.hypot(dx, dz);

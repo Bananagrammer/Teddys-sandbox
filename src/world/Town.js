@@ -16,6 +16,8 @@ import {
   WELL,
   TREE_HOUSE,
   TREE_LADDER,
+  PLAYGROUND,
+  PLAY_LADDERS,
   GROUND_SIZE,
   PLAZA_HALF,
   roadDecals,
@@ -98,6 +100,7 @@ export class Town {
     this._well(WELL.x, WELL.z);
     TREES.forEach(([x, z], i) => this._tree(i, x, z));
     this._treeHouse(TREE_HOUSE);
+    this._playground(PLAYGROUND);
     this.lamps = LAMPS.map(([x, z], i) => this._lamp(i, x, z));
   }
 
@@ -1472,6 +1475,172 @@ export class Town {
       leaf.isPickable = false;
       this.scene._shadowGenerator?.addShadowCaster(leaf);
     }
+  }
+
+  /**
+   * Southwest meadow, past the last streets. Swing set, a small slide, and a
+   * structure with a ladder and two slides. Ladders use the same hold-A climb.
+   */
+  _playground(origin) {
+    const x = origin.x;
+    const z = origin.z;
+    const pad = this._mat("playPad", 0.45, 0.62, 0.28, 0.02);
+    const yellow = this._mat("playYellow", 0.9, 0.72, 0.16, 0.08);
+    const red = this._mat("playRed", 0.78, 0.2, 0.16, 0.06);
+    const blue = this._mat("playBlue", 0.22, 0.45, 0.75, 0.06);
+    const green = this._mat("playGreen", 0.28, 0.55, 0.32, 0.04);
+    const seat = this._mat("playSeat", 0.2, 0.22, 0.26, 0.04);
+    for (const mat of [pad, yellow, red, blue, green, seat]) mat.maxSimultaneousLights = 8;
+
+    const ground = MeshBuilder.CreateBox("playPad", {
+      width: 9.6,
+      height: 0.04,
+      depth: 9.6,
+    }, this.scene);
+    ground.position.set(x, 0.03, z);
+    ground.material = pad;
+    ground.receiveShadows = true;
+
+    this._swingSet(x + 1.6, z + 3.2, yellow, seat);
+    const slide = PLAY_LADDERS[0];
+    const structure = PLAY_LADDERS[1];
+    this._playSlide("playSlide", slide.standX, slide.standZ, slide.deckTop, red, yellow);
+    this._playStructure(structure.standX, structure.standZ, structure.deckTop, blue, red, green, yellow);
+  }
+
+  _swingSet(x, z, frameMat, seatMat) {
+    const span = 4.2;
+    const top = 2.45;
+    for (const side of [-1, 1]) {
+      const px = x + side * (span / 2);
+      this._solidBox(`swingPost${side}`, 0.1, top, 0.1, px, top / 2, z, frameMat, 0.4);
+      const brace = MeshBuilder.CreateBox(`swingBrace${side}`, {
+        width: 0.08,
+        height: 2.3,
+        depth: 0.08,
+      }, this.scene);
+      brace.position.set(px, 1.15, z + side * 0.55);
+      brace.rotation.x = side * 0.55;
+      brace.material = frameMat;
+      brace.receiveShadows = true;
+    }
+    this._solidBox("swingBar", span + 0.2, 0.1, 0.1, x, top, z, frameMat, 0.4);
+    for (const side of [-0.7, 0.7]) {
+      const sx = x + side;
+      for (const chain of [-0.18, 0.18]) {
+        const link = MeshBuilder.CreateBox(`swingChain${side}${chain}`, {
+          width: 0.03,
+          height: 1.35,
+          depth: 0.03,
+        }, this.scene);
+        link.position.set(sx + chain, top - 0.72, z);
+        link.material = frameMat;
+        link.isPickable = false;
+      }
+      const bench = MeshBuilder.CreateBox(`swingSeat${side}`, {
+        width: 0.5,
+        height: 0.06,
+        depth: 0.22,
+      }, this.scene);
+      bench.position.set(sx, top - 1.42, z);
+      bench.material = seatMat;
+      bench.receiveShadows = true;
+    }
+  }
+
+  _playSlide(name, x, z, deckTop, chuteMat, frameMat) {
+    this._solidBox(`${name}Deck`, 1.45, 0.12, 1.35, x, deckTop - 0.06, z, frameMat, 0.6);
+    for (const [sx, sz] of [[-0.6, -0.5], [0.6, -0.5], [-0.6, 0.5], [0.6, 0.5]]) {
+      this._solidBox(`${name}Leg${sx}${sz}`, 0.08, deckTop - 0.12, 0.08, x + sx, (deckTop - 0.12) / 2, z + sz, frameMat, 0.4);
+    }
+    this._ladderPair(name, x, z - 1.05, deckTop, frameMat);
+    this._chute(`${name}Chute`, x, z + 0.7 + 1.7, 0.7, 3.4, deckTop - 0.1, 0, chuteMat);
+  }
+
+  _playStructure(x, z, deckTop, frameMat, chuteMat, deckMat, ladderMat) {
+    const hw = 1.8;
+    const hd = 1.45;
+    this._solidBox("playDeck", hw * 2, 0.14, hd * 2, x, deckTop - 0.07, z, deckMat, 0.8);
+    for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+      this._solidBox(
+        `playPost${sx}${sz}`,
+        0.1,
+        deckTop - 0.14,
+        0.1,
+        x + sx * (hw - 0.15),
+        (deckTop - 0.14) / 2,
+        z + sz * (hd - 0.15),
+        frameMat,
+        0.4,
+      );
+    }
+    this._solidBox("playRailN", hw * 2 - 0.2, 0.55, 0.08, x, deckTop + 0.28, z + hd - 0.08, frameMat, 0.5);
+    this._solidBox("playRailE", 0.08, 0.55, hd * 2 - 0.4, x + hw - 0.08, deckTop + 0.28, z, frameMat, 0.5);
+    this._ladderPair("playStruct", x, z - hd - 0.4, deckTop, ladderMat);
+    this._chute("playChuteW", x - hw - 1.8, z + 0.15, 0.72, 3.6, deckTop - 0.12, Math.PI / 2, chuteMat);
+    this._chute("playChuteE", x + hw + 1.45, z - 0.2, 0.62, 2.9, deckTop - 0.2, -Math.PI / 2, chuteMat);
+  }
+
+  _ladderPair(name, x, z, deckTop, mat) {
+    const spread = 0.22;
+    const railT = 0.07;
+    this._solidBox(`${name}LadderRailL`, railT, deckTop, 0.08, x - spread, deckTop / 2, z, mat, 0.5);
+    this._solidBox(`${name}LadderRailR`, railT, deckTop, 0.08, x + spread, deckTop / 2, z, mat, 0.5);
+    const rungLen = spread * 2 - railT;
+    const count = Math.max(4, Math.round(deckTop / 0.28));
+    for (let i = 0; i < count; i += 1) {
+      const y = 0.32 + ((deckTop - 0.4) * i) / (count - 1);
+      const rung = MeshBuilder.CreateCylinder(`${name}LadderRung${i}`, {
+        height: rungLen,
+        diameter: 0.045,
+        tessellation: 6,
+      }, this.scene);
+      rung.rotation.z = Math.PI / 2;
+      rung.position.set(x, y, z);
+      rung.material = mat;
+      rung.isPickable = false;
+    }
+  }
+
+  /**
+   * A chute whose high end is at the platform and whose low end meets the ground.
+   * `yaw` 0 runs toward +z. The boy can walk down it.
+   */
+  _chute(name, x, z, width, run, rise, yaw, mat) {
+    const length = Math.hypot(run, rise);
+    const theta = Math.atan2(rise, run);
+    const mesh = MeshBuilder.CreateBox(name, {
+      width,
+      height: 0.1,
+      depth: length,
+    }, this.scene);
+    mesh.rotation.y = yaw;
+    mesh.rotation.x = -theta;
+    mesh.position.set(x, rise / 2 + 0.05, z);
+    mesh.material = mat;
+    mesh.receiveShadows = true;
+    this.scene._shadowGenerator?.addShadowCaster(mesh);
+    new PhysicsAggregate(mesh, PhysicsShapeType.BOX, { mass: 0, friction: 0.35 }, this.scene);
+
+    const side = (suffix, sign) => {
+      const rail = MeshBuilder.CreateBox(`${name}Rail${suffix}`, {
+        width: 0.06,
+        height: 0.16,
+        depth: length,
+      }, this.scene);
+      rail.rotation.y = yaw;
+      rail.rotation.x = -theta;
+      const across = sign * (width / 2);
+      rail.position.set(
+        x + Math.cos(yaw) * across,
+        rise / 2 + 0.16,
+        z - Math.sin(yaw) * across,
+      );
+      rail.material = mat;
+      rail.isPickable = false;
+    };
+    side("L", -1);
+    side("R", 1);
   }
 
   /**

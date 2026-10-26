@@ -173,8 +173,8 @@ export class InputManager {
       ? "Esc: release mouse"
       : "Click for mouse look";
     const pad = this._padConnected
-      ? "Xbox connected — left stick walks, right stick looks, hold A at the ladder to climb, A jumps away from it, X toggles the nearest door"
-      : "Xbox: left stick walks, right stick looks, hold A at the ladder to climb, A jumps away from it, X toggles the nearest door";
+      ? "Xbox connected — left stick walks, right stick looks, hold A at a ladder to climb, A jumps away from it, X toggles the nearest door"
+      : "Xbox: left stick walks, right stick looks, hold A at a ladder to climb, A jumps away from it, X toggles the nearest door";
     hud.textContent = `${look}  |  WASD or arrows: walk  |  Space: jump  |  F: toggle the nearest door  |  Mouse: look  |  ${pad}`;
   }
 }
