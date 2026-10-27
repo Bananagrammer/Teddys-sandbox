@@ -1,37 +1,39 @@
 import { HemisphericLight } from "@babylonjs/core/Lights/hemisphericLight";
 import { DirectionalLight } from "@babylonjs/core/Lights/directionalLight";
 import { ShadowGenerator } from "@babylonjs/core/Lights/Shadows/shadowGenerator";
+import "@babylonjs/core/Lights/Shadows/shadowGeneratorSceneComponent";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { Color3, Color4 } from "@babylonjs/core/Maths/math.color";
 import { Scene } from "@babylonjs/core/scene";
+import { createSky, skyHorizonColor } from "../graphics/SurfaceTextures.js";
 
 export class SceneSetup {
   static init(scene) {
-    // Overcast sky color
-    scene.clearColor = new Color4(0.28, 0.32, 0.38, 1.0);
+    const horizon = skyHorizonColor();
+    scene.clearColor = new Color4(horizon.r, horizon.g, horizon.b, 1);
+    scene.ambientColor = new Color3(0.18, 0.18, 0.2);
+    createSky(scene);
 
-    // Ambient fill light — prevents completely black shadows
     const hemi = new HemisphericLight("hemi", new Vector3(0, 1, 0), scene);
-    hemi.intensity = 0.35;
-    hemi.diffuse = new Color3(0.7, 0.65, 0.6);
-    hemi.groundColor = new Color3(0.12, 0.10, 0.08);
+    hemi.intensity = 0.42;
+    hemi.diffuse = new Color3(0.78, 0.84, 0.95);
+    hemi.groundColor = new Color3(0.28, 0.3, 0.2);
 
-    // Directional sun light — casts shadows
-    const sun = new DirectionalLight("sun", new Vector3(-1, -2, -1).normalize(), scene);
-    sun.intensity = 1.1;
-    sun.diffuse = new Color3(1.0, 0.95, 0.85);
-    sun.position = new Vector3(60, 100, 60);
+    const sun = new DirectionalLight("sun", new Vector3(-0.85, -1.35, 0.35).normalize(), scene);
+    sun.intensity = 1.45;
+    sun.diffuse = new Color3(1.0, 0.94, 0.82);
+    sun.position = new Vector3(-30, 70, 18);
+    sun.autoCalcShadowZBounds = true;
 
-    // Shadow generator attached to sun
-    const shadowGen = new ShadowGenerator(2048, sun);
+    const shadowGen = new ShadowGenerator(1024, sun);
     shadowGen.useBlurExponentialShadowMap = true;
     shadowGen.blurKernel = 8;
-    // Store on scene so world/entity builders can self-register
+    shadowGen.bias = 0.005;
+    shadowGen.normalBias = 0.04;
     scene._shadowGenerator = shadowGen;
 
-    // Atmospheric fog — hides far draw distance, adds mood
     scene.fogMode = Scene.FOGMODE_EXP2;
-    scene.fogColor = new Color3(0.28, 0.32, 0.38);
-    scene.fogDensity = 0.010;
+    scene.fogColor = horizon;
+    scene.fogDensity = 0.0036;
   }
 }

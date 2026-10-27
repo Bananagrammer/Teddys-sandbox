@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Orc's Keep</title>
+  <title>Town Walk</title>
+  <link rel="icon" href="data:," />
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { overflow: hidden; background: #000; }
@@ -21,6 +22,8 @@
       color: #ddd;
       font-family: monospace;
       font-size: 14px;
+      text-align: center;
+      max-width: 92vw;
       text-shadow: 1px 1px 3px #000;
       pointer-events: none;
       user-select: none;
@@ -39,7 +42,7 @@
 </head>
 <body>
   <canvas id="renderCanvas" tabindex="0"></canvas>
-  <div id="hud">Click to capture mouse &nbsp;|&nbsp; WASD: Move &nbsp;|&nbsp; Mouse: Look &nbsp;|&nbsp; Space: Jump</div>
+  <div id="hud">Click for mouse look &nbsp;|&nbsp; WASD or arrows: walk &nbsp;|&nbsp; Space: jump &nbsp;|&nbsp; F: toggle the nearest door &nbsp;|&nbsp; Mouse: look &nbsp;|&nbsp; Xbox: left stick walks, right stick looks, hold A at the ladder to climb, A jumps away from it, X toggles the nearest door</div>
   <div id="crosshair">+</div>
   <script type="module" src="/src/main.js"></script>
 </body>
