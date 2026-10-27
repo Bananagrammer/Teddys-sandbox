@@ -1,6 +1,8 @@
-# Town Walk
+# Town Walk (version 2)
 
 A first-person walk. A boy starts in a small town. The street lamps around the plaza are already lit.
+
+This copy is forked from version 1. See `VERSION.md`. Version 1 remains on `cursor/first-person-town-walk-d5e0`.
 
 ## Run
 
