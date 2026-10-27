@@ -1479,7 +1479,7 @@ export class Town {
 
   /**
    * Southwest meadow, past the last streets. Swing set, a small slide, and a
-   * structure with a ladder and two slides. Ladders use the same hold-A climb.
+   * structure with a ladder and one slide. Ladders use the same hold-A climb.
    */
   _playground(origin) {
     const x = origin.x;
@@ -1577,7 +1577,7 @@ export class Town {
     this._solidBox("playRailN", hw * 2 - 0.2, 0.55, 0.08, x, deckTop + 0.28, z + hd - 0.08, frameMat, 0.5);
     this._solidBox("playRailE", 0.08, 0.55, hd * 2 - 0.4, x + hw - 0.08, deckTop + 0.28, z, frameMat, 0.5);
     this._ladderPair("playStruct", x, z - hd - 0.4, deckTop, ladderMat);
-    this._chute("playChuteW", x - hw - 1.8, z + 0.15, 0.72, 3.6, deckTop - 0.12, Math.PI / 2, chuteMat);
+    // The west chute ran through the small slide's ladder. That chute is gone; the ladder stays.
     this._chute("playChuteE", x + hw + 1.45, z - 0.2, 0.62, 2.9, deckTop - 0.2, -Math.PI / 2, chuteMat);
   }
 
