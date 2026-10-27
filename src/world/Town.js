@@ -1575,7 +1575,7 @@ export class Town {
       );
     }
     this._solidBox("playRailN", hw * 2 - 0.2, 0.55, 0.08, x, deckTop + 0.28, z + hd - 0.08, frameMat, 0.5);
-    this._solidBox("playRailE", 0.08, 0.55, hd * 2 - 0.4, x + hw - 0.08, deckTop + 0.28, z, frameMat, 0.5);
+    // East edge stays open so the red chute meets the deck.
     this._ladderPair("playStruct", x, z - hd - 0.4, deckTop, ladderMat);
     // The west chute ran through the small slide's ladder. That chute is gone; the ladder stays.
     this._chute("playChuteE", x + hw + 1.45, z - 0.2, 0.62, 2.9, deckTop - 0.2, -Math.PI / 2, chuteMat);
