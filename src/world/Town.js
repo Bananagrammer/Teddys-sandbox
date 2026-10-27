@@ -1554,7 +1554,9 @@ export class Town {
       this._solidBox(`${name}Leg${sx}${sz}`, 0.08, deckTop - 0.12, 0.08, x + sx, (deckTop - 0.12) / 2, z + sz, frameMat, 0.4);
     }
     this._ladderPair(name, x, z - 1.05, deckTop, frameMat);
-    this._chute(`${name}Chute`, x, z + 0.7 + 1.7, 0.7, 3.4, deckTop - 0.1, 0, chuteMat);
+    // Pitch sign +1 puts the high end against this deck. The default chute
+    // pitch leaves this small slide running uphill away from the ladder.
+    this._chute(`${name}Chute`, x, z + 0.7 + 1.7, 0.7, 3.4, deckTop - 0.1, 0, chuteMat, 1);
   }
 
   _playStructure(x, z, deckTop, frameMat, chuteMat, deckMat, ladderMat) {
@@ -1606,16 +1608,16 @@ export class Town {
    * A chute whose high end is at the platform and whose low end meets the ground.
    * `yaw` 0 runs toward +z. The boy can walk down it.
    */
-  _chute(name, x, z, width, run, rise, yaw, mat) {
+  _chute(name, x, z, width, run, rise, yaw, mat, pitchSign = -1) {
     const length = Math.hypot(run, rise);
-    const theta = Math.atan2(rise, run);
+    const theta = Math.atan2(rise, run) * pitchSign;
     const mesh = MeshBuilder.CreateBox(name, {
       width,
       height: 0.1,
       depth: length,
     }, this.scene);
     mesh.rotation.y = yaw;
-    mesh.rotation.x = -theta;
+    mesh.rotation.x = theta;
     mesh.position.set(x, rise / 2 + 0.05, z);
     mesh.material = mat;
     mesh.receiveShadows = true;
@@ -1629,7 +1631,7 @@ export class Town {
         depth: length,
       }, this.scene);
       rail.rotation.y = yaw;
-      rail.rotation.x = -theta;
+      rail.rotation.x = theta;
       const across = sign * (width / 2);
       rail.position.set(
         x + Math.cos(yaw) * across,
